@@ -1,0 +1,945 @@
+/**
+ * PROYECTO: COMUNAS ANARQUISTAS
+ * Creado por: Carlos Bruno Díaz Córdoba, Emmanuel Matarrita Pineda
+ * Fecha de creación: 30/09/2026
+ * Última modificación: 07/10/2026
+ */
+#include "sociedad.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// estructura global del juego
+struct juego estado;
+
+/**
+ * crearComuna: Crea una nueva comuna con el nombre especificado.
+ * Inicializa los indices en 0 y los punteros de la lista circular apuntan a si mismo.
+ */
+struct comuna* crearComuna(char* nombre){
+    struct comuna* nueva = calloc(1, sizeof(struct comuna));
+    strcpy(nueva->nombre, nombre);
+    nueva->necesidad = 0.0;
+    nueva->satisfaccion = 0.0;
+    nueva->pobreza = 0.0;
+    nueva->reciprocidad = 0.0;
+    nueva->siguiente = nueva;
+    nueva->anterior = nueva;
+    return nueva;
+}
+
+/**
+ * mostrarComuna: Muestra en pantalla la informacion de una comuna.
+ * Imprime el nombre y los indices de necesidad, satisfaccion y pobreza.
+ */
+void mostrarComuna(struct comuna* comuna){
+    if(comuna==NULL){
+        return;
+    }
+    printf("\n");
+    printf("########################################\n");
+    printf("#  COMUNA: %s\n", comuna->nombre);
+    printf("########################################\n");
+    printf("#  Necesidad:    %.2f%%\n", comuna->necesidad);
+    printf("#  Satisfaccion: %.2f%%\n", comuna->satisfaccion);
+    printf("#  Pobreza:      %.2f%%\n", comuna->pobreza);
+    printf("########################################\n");
+}
+
+/**
+ * agregarBien: Agrega un nuevo bien a la lista de bienes de una comuna.
+ * Inserta el bien al inicio de la lista enlazada.
+ */
+void agregarBien(struct comuna* comuna, char* nombre, int maximaCantidad, int actualCantidad){
+    struct bien* nuevo = calloc(1, sizeof(struct bien));
+    strcpy(nuevo->nombre, nombre);
+    nuevo->maximaCantidad = maximaCantidad;
+    nuevo->actualCantidad = actualCantidad;
+    nuevo->siguiente = comuna->bienes;
+    comuna->bienes = nuevo;
+}
+
+/**
+ * agregarPersona: Agrega una nueva persona a la lista de habitantes de una comuna.
+ * Inserta la persona al inicio de la lista enlazada.
+ */
+void agregarPersona(struct comuna* comuna, char* nombre){
+    struct persona* nuevo = calloc(1, sizeof(struct persona));
+    strcpy(nuevo->nombre, nombre);
+    nuevo->siguiente = comuna->habitantes;
+    comuna->habitantes = nuevo;
+}
+
+/**
+ * agregarServicioAPersona: Agrega un oficio a la lista de servicios de una persona.
+ * Inserta el servicio al inicio de la lista enlazada de la persona.
+ */
+void agregarServicioAPersona(struct persona* persona, char* nombre){
+    if(persona==NULL){
+        return;
+    }
+
+    struct servicio* nuevo = calloc(1, sizeof(struct servicio));
+    strcpy(nuevo->nombre, nombre);
+    nuevo->siguiente = persona->servicios;
+    persona->servicios = nuevo;
+}
+
+/**
+ * contarPersonas: Cuenta cuantas personas hay en una comuna.
+ * Recorre la lista de habitantes y retorna el conteo total.
+ */
+int contarPersonas(struct comuna* comuna){
+    if(comuna==NULL){
+        return 0;
+    }
+
+    int contador = 0;
+    struct persona* actual = comuna->habitantes;
+    while(actual!=NULL){
+        contador = contador + 1;
+        actual = actual->siguiente;
+    }
+
+    return contador;
+}
+
+/**
+ * contarBienes: Cuenta cuantos bienes hay en una comuna.
+ * Recorre la lista de bienes y retorna el conteo total.
+ */
+int contarBienes(struct comuna* comuna){
+    if(comuna==NULL){
+        return 0;
+    }
+
+    int contador = 0;
+    struct bien* actual = comuna->bienes;
+    while(actual!=NULL){
+        contador = contador + 1;
+        actual = actual->siguiente;
+    }
+
+    return contador;
+}
+
+/**
+ * contarServicios: Cuenta cuantos oficios tienen las personas de una comuna.
+ * Recorre los habitantes y suma los servicios que sabe cada uno.
+ */
+int contarServicios(struct comuna* comuna){
+    if(comuna==NULL){
+        return 0;
+    }
+
+    int contador = 0;
+    struct persona* personaActual = comuna->habitantes;
+    while(personaActual!=NULL){
+        struct servicio* servicioActual = personaActual->servicios;
+        while(servicioActual!=NULL){
+            contador = contador + 1;
+            servicioActual = servicioActual->siguiente;
+        }
+
+        personaActual = personaActual->siguiente;
+    }
+
+    return contador;
+}
+
+/**
+ * mostrarBienes: Muestra en pantalla los bienes de una comuna.
+ * Recorre la lista de bienes e imprime el nombre y las cantidades de cada uno.
+ */
+void mostrarBienes(struct comuna* comuna){
+    if(comuna==NULL){
+        return;
+    }
+
+    printf("\n");
+    printf("########################################\n");
+    printf("#  BIENES DE: %s\n", comuna->nombre);
+    printf("########################################\n");
+    struct bien* actual = comuna->bienes;
+    while(actual!=NULL){
+        printf("#  %-20s %3d/%3d\n", actual->nombre, actual->actualCantidad, actual->maximaCantidad);
+        actual = actual->siguiente;
+    }
+
+    printf("########################################\n");
+}
+
+/**
+ * mostrarServicios: Muestra en pantalla los oficios de una comuna.
+ * Recorre los habitantes e imprime los servicios que sabe cada persona.
+ */
+void mostrarServicios(struct comuna* comuna){
+    if(comuna==NULL){
+        return;
+    }
+
+    printf("\n");
+    printf("########################################\n");
+    printf("#  OFICIOS DE: %s\n", comuna->nombre);
+    printf("########################################\n");
+    struct persona* personaActual = comuna->habitantes;
+    while(personaActual!=NULL){
+        printf("#  %s:\n", personaActual->nombre);
+        struct servicio* servicioActual = personaActual->servicios;
+        if(servicioActual==NULL){
+            printf("#    no sabe hacer nada\n");
+        }
+
+        while(servicioActual!=NULL){
+            printf("#    %s\n", servicioActual->nombre);
+            servicioActual = servicioActual->siguiente;
+        }
+
+        personaActual = personaActual->siguiente;
+    }
+
+    printf("########################################\n");
+}
+
+/**
+ * mostrarPersonas: Muestra en pantalla los habitantes de una comuna.
+ * Recorre la lista de habitantes e imprime el nombre de cada persona.
+ */
+void mostrarPersonas(struct comuna* comuna){
+    if(comuna==NULL){
+        return;
+    }
+
+    printf("\n");
+    printf("########################################\n");
+    printf("#  HABITANTES DE: %s\n", comuna->nombre);
+    printf("########################################\n");
+    struct persona* actual = comuna->habitantes;
+    int contador = 1;
+    while(actual!=NULL){
+        printf("#  %d. %s\n", contador, actual->nombre);
+        contador = contador + 1;
+        actual = actual->siguiente;
+    }
+
+    printf("########################################\n");
+}
+
+/**
+ * agregarPersonas: Agrega varias personas a una comuna desde un archivo.
+ * Lee nombres del archivo y los agrega a la lista de habitantes.
+ * Retorna el numero de personas agregadas.
+ */
+int agregarPersonas(struct comuna* comuna, char* nombreArchivo){
+    if(comuna==NULL || nombreArchivo==NULL){
+        return 0;
+    }
+    FILE* archivo = fopen(nombreArchivo, "r");
+    if(archivo==NULL){
+        printf("Error: no se pudo abrir el archivo %s\n", nombreArchivo);
+        return 0;
+    }
+    char nombre[50];
+    int contador = 0;
+    while(fgets(nombre, 50, archivo)){
+        nombre[strcspn(nombre, "\n")] = 0;
+        agregarPersona(comuna, nombre);
+        contador = contador + 1;
+    }
+    fclose(archivo);
+    return contador;
+}
+
+/**
+ * agregarBienes: Agrega varios bienes a una comuna desde un archivo.
+ * Lee nombres del archivo y los agrega a la lista de bienes.
+ * Retorna el numero de bienes agregados.
+ */
+int agregarBienes(struct comuna* comuna, char* nombreArchivo){
+    if(comuna==NULL || nombreArchivo==NULL){
+        return 0;
+    }
+    FILE* archivo = fopen(nombreArchivo, "r");
+    if(archivo==NULL){
+        printf("Error: no se pudo abrir el archivo %s\n", nombreArchivo);
+        return 0;
+    }
+    char nombre[50];
+    int contador = 0;
+    while(fgets(nombre, 50, archivo)){
+        nombre[strcspn(nombre, "\n")] = 0;
+        agregarBien(comuna, nombre, 100, 90);
+        contador = contador + 1;
+    }
+    fclose(archivo);
+    return contador;
+}
+
+/**
+ * crearComunas: Crea varias comunas y las conecta en lista circular doble.
+ * Lee nombres del archivo y crea una comuna por cada nombre.
+ * Retorna la lista de comunas creadas.
+ */
+struct comuna* crearComunas(char* nombreArchivo, int cantidad, int numServicios, int numBienes){
+    FILE* archivo = fopen(nombreArchivo, "r");
+    if(archivo==NULL){
+        printf("Error: no se pudo abrir el archivo %s\n", nombreArchivo);
+        return NULL;
+    }
+    char nombres[50][50];
+    int total = 0;
+    char nombre[50];
+    while(fgets(nombre, 50, archivo) && total < 50){
+        nombre[strcspn(nombre, "\n")] = 0;
+        strcpy(nombres[total], nombre);
+        total = total + 1;
+    }
+    fclose(archivo);
+    int seleccionadas[50];
+    for(int i = 0; i < 50; i++){
+        seleccionadas[i] = 0;
+    }
+    struct comuna* lista = NULL;
+    int creadas = 0;
+    while(creadas < cantidad && creadas < total){
+        int indice = rand() % total;
+        if(seleccionadas[indice] == 0){
+            seleccionadas[indice] = 1;
+            agregarComuna(&lista, nombres[indice]);
+            creadas = creadas + 1;
+        }
+    }
+    FILE* archivoBienes = fopen("bienes", "r");
+    if(archivoBienes != NULL){
+        char bien[50];
+        int cargados = 0;
+        while(fgets(bien, 50, archivoBienes) && cargados < numBienes){
+            bien[strcspn(bien, "\n")] = 0;
+            struct comuna* actual = lista;
+            if(actual != NULL){
+                do{
+                    agregarBien(actual, bien, 100, 90);
+                    actual = actual->siguiente;
+                }while(actual != lista);
+            }
+            cargados = cargados + 1;
+        }
+        fclose(archivoBienes);
+    }
+    FILE* archivoPersonas = fopen("personas", "r");
+    if(archivoPersonas != NULL){
+        char persona[50];
+        int agregadas = 0;
+        while(fgets(persona, 50, archivoPersonas) && agregadas < 500){
+            persona[strcspn(persona, "\n")] = 0;
+            int comunaIndice = rand() % cantidad;
+            struct comuna* actual = lista;
+            for(int i = 0; i < comunaIndice; i++){
+                actual = actual->siguiente;
+            }
+            agregarPersona(actual, persona);
+            agregadas = agregadas + 1;
+        }
+        fclose(archivoPersonas);
+    }
+    return lista;
+}
+
+/**
+ * agregarComuna: Agrega una comuna a la lista circular doble.
+ * Inserta la comuna al final de la lista y conecta los punteros.
+ */
+void agregarComuna(struct comuna** lista, char* nombre){
+    if(lista==NULL){
+        return;
+    }
+    struct comuna* nueva = crearComuna(nombre);
+    if(nueva==NULL){
+        return;
+    }
+    if(*lista==NULL){
+        *lista = nueva;
+        return;
+    }
+    struct comuna* ultimo = (*lista)->anterior;
+    ultimo->siguiente = nueva;
+    nueva->anterior = ultimo;
+    nueva->siguiente = *lista;
+    (*lista)->anterior = nueva;
+}
+
+/**
+ * contarComunas: Cuenta cuantas comunas hay en la lista.
+ * Recorre la lista circular y retorna el conteo total.
+ */
+int contarComunas(struct comuna* lista){
+    if(lista==NULL){
+        return 0;
+    }
+    int contador = 0;
+    struct comuna* actual = lista;
+    do{
+        contador = contador + 1;
+        actual = actual->siguiente;
+    }while(actual!=lista);
+    return contador;
+}
+
+/**
+ * inicializarSociedad: Inicializa todas las comunas con personas, bienes y servicios.
+ * Carga los datos desde los archivos y los asigna a cada comuna.
+ */
+void inicializarSociedad(struct comuna* lista){
+    if(lista==NULL){
+        return;
+    }
+    // Las personas ya fueron cargadas en crearComunas
+    // Aqui solo verificamos que todo este correcto
+    int totalPersonas = 0;
+    struct comuna* actual = lista;
+    do{
+        totalPersonas = totalPersonas + contarPersonas(actual);
+        actual = actual->siguiente;
+    }while(actual!=lista);
+    printf("Sociedad inicializada: %d comunas, %d personas totales\n", contarComunas(lista), totalPersonas);
+}
+
+/**
+ * calcularNecesidad: Calcula el indice de necesidad de una comuna.
+ * Recorre los bienes y calcula el promedio de (actual/maxima).
+ * Alto = tiene recursos, bajo = necesita recursos.
+ */
+float calcularNecesidad(struct comuna* comuna){
+    if(comuna==NULL || comuna->bienes==NULL){
+        return 0.0;
+    }
+    float suma = 0.0;
+    int contador = 0;
+    struct bien* actual = comuna->bienes;
+    while(actual!=NULL){
+        if(actual->maximaCantidad>0){
+            suma = suma + ((float)actual->actualCantidad / actual->maximaCantidad);
+            contador = contador + 1;
+        }
+        actual = actual->siguiente;
+    }
+    if(contador==0){
+        return 0.0;
+    }
+    return (suma/contador)*100.0;
+}
+
+/**
+ * calcularSatisfaccion: Calcula el indice de satisfaccion de una comuna.
+ * Considera el indice de necesidad y el porcentaje de personas que sabe un oficio.
+ * Mientras mas gente con oficio haya, mas satisfecha esta la comuna.
+ */
+float calcularSatisfaccion(struct comuna* comuna){
+    if(comuna==NULL){
+        return 50.0;
+    }
+    int totalPersonas = contarPersonas(comuna);
+    int personasConOficio = 0;
+    struct persona* personaActual = comuna->habitantes;
+    while(personaActual!=NULL){
+        if(personaActual->servicios!=NULL){
+            personasConOficio = personasConOficio + 1;
+        }
+        personaActual = personaActual->siguiente;
+    }
+    float ratioServicios;
+    if(totalPersonas>0){
+        ratioServicios = (float)personasConOficio/(float)totalPersonas;
+    }
+    else{
+        ratioServicios = 0.0;
+    }
+    float satisfaccion = (comuna->necesidad*0.6)+(ratioServicios*40.0);
+    if(satisfaccion>100.0){
+        satisfaccion = 100.0;
+    }
+    if(satisfaccion<0.0){
+        satisfaccion = 0.0;
+    }
+    return satisfaccion;
+}
+
+/**
+ * recalcularIndices: Recalcula los indices de todas las comunas.
+ */
+void recalcularIndices(struct comuna* lista){
+    if(lista==NULL){
+        return;
+    }
+    struct comuna* actual = lista;
+    do{
+        actual->necesidad = calcularNecesidad(actual);
+        actual->satisfaccion = calcularSatisfaccion(actual);
+        actual = actual->siguiente;
+    }while(actual!=lista);
+}
+
+/**
+ * aplicarConsumoNocturno: Reduce los bienes de todas las comunas.
+ * Cada persona consume 0.1 bienes por dia (minimo 7, maximo 10).
+ */
+void aplicarConsumoNocturno(struct comuna* lista){
+    if(lista==NULL){
+        return;
+    }
+    struct comuna* actual = lista;
+    do{
+        int personas = contarPersonas(actual);
+        int consumo = (int)(personas*0.1);
+        if(consumo<7){
+            consumo = 7;
+        }
+        if(consumo>10){
+            consumo = 10;
+        }
+        struct bien* bien = actual->bienes;
+        while(bien!=NULL){
+            bien->actualCantidad = bien->actualCantidad - consumo;
+            if(bien->actualCantidad<0){
+                bien->actualCantidad = 0;
+            }
+            bien = bien->siguiente;
+        }
+        actual = actual->siguiente;
+    }while(actual!=lista);
+    printf("Consumo nocturno aplicado a %d comunas\n", contarComunas(lista));
+}
+
+/**
+ * calcularPobrezaGlobal: Calcula la pobreza global del juego.
+ * Se calcula como: (personas_fuera / 500) * 100.
+ */
+float calcularPobrezaGlobal(){
+    return ((float)estado.personas_fuera/500.0)*100.0;
+}
+
+/**
+ * actualizarPobreza: Actualiza la pobreza global y asigna el valor a todas las comunas.
+ */
+void actualizarPobreza(struct comuna* lista){
+    if(lista==NULL){
+        return;
+    }
+    estado.pobreza_global = calcularPobrezaGlobal();
+    struct comuna* actual = lista;
+    do{
+        actual->pobreza = estado.pobreza_global;
+        actual = actual->siguiente;
+    }while(actual!=lista);
+    printf("Pobreza global: %.2f%% (%d personas fuera)\n", estado.pobreza_global, estado.personas_fuera);
+}
+
+/**
+ * verificarEmergencias: Verifica y aplica emergencias aleatorias.
+ * Huelga: probabilidad base 10% + pobreza * 0.3%
+ * Vandalos: probabilidad base 5% + pobreza * 0.4%
+ * Temblor: probabilidad base 3%
+ * Inundacion: probabilidad base 2%
+ * Feriado: probabilidad base 4%
+ * Presidencia: probabilidad base 3%
+ */
+void verificarEmergencias(struct comuna* lista){
+    if(lista==NULL){
+        return;
+    }
+    float pobreza = estado.pobreza_global;
+
+    // Huelga: probabilidad base 10% + pobreza * 0.3%
+    float probabilidadHuelga = 0.10+(pobreza*0.003);
+    if((float)rand()/RAND_MAX < probabilidadHuelga){
+        printf("HUELGA en una comuna! Intercambios bloqueados, pues estan exigiendo aguinaldo.\n");
+    }
+
+    // Vandalos: probabilidad base 5% + pobreza * 0.4%
+    float probabilidadVandalos = 0.05+(pobreza*0.004);
+    if((float)rand()/RAND_MAX < probabilidadVandalos){
+        printf("Hay vandalismo, pero como no es dia de revision, los policias no hacen nada por ello. :)\n");
+    }
+
+    // Temblor: probabilidad base 3%
+    float probabilidadTemblor = 0.03;
+    if((float)rand()/RAND_MAX < probabilidadTemblor){
+        printf("TEMBLOR! Los servicios y bienes bajaron, debido a que casi se nos va Panama.\n");
+    }
+
+    // Inundacion: probabilidad base 2%
+    float probabilidadInundacion = 0.02;
+    if((float)rand()/RAND_MAX < probabilidadInundacion){
+        printf("INUNDACION! Los bienes bajaron, ahora resulta que vivimos como sirenas.\n");
+    }
+
+    // Feriado: probabilidad base 4%
+    float probabilidadFeriado = 0.04;
+    if((float)rand()/RAND_MAX < probabilidadFeriado){
+        printf("FERIADO! No hay consumo de bienes ni intercambios, todos a la playa.\n");
+    }
+
+    // Presidencia: probabilidad base 3%
+    float probabilidadPresidencia = 0.03;
+    if((float)rand()/RAND_MAX < probabilidadPresidencia){
+        estado.transferencias_bloqueadas = 1;
+        printf("ANUNCIO! Nuestra querida presidencia nos dicta que hoy si van a trabajar, por lo tanto no hay intercambios.\n");
+    }
+}
+
+/**
+ * liberarComuna: Libera toda la memoria asignada a una comuna.
+ * Libera los bienes, las personas, los servicios y finalmente la comuna.
+ * Asigna NULL a cada puntero despues de liberarlo.
+ */
+void liberarComuna(struct comuna* comuna){
+    if(comuna==NULL){
+        return;
+    }
+    struct bien* bienActual = comuna->bienes;
+    while(bienActual!=NULL){
+        struct bien* temporal = bienActual;
+        bienActual = bienActual->siguiente;
+        free(temporal);
+        temporal = NULL;
+    }
+    struct persona* personaActual = comuna->habitantes;
+    while(personaActual!=NULL){
+        struct servicio* servicioActual = personaActual->servicios;
+        while(servicioActual!=NULL){
+            struct servicio* temporalServicio = servicioActual;
+            servicioActual = servicioActual->siguiente;
+            free(temporalServicio);
+            temporalServicio = NULL;
+        }
+        personaActual->servicios = NULL;
+        struct persona* temporal = personaActual;
+        personaActual = personaActual->siguiente;
+        free(temporal);
+        temporal = NULL;
+    }
+    free(comuna);
+    comuna = NULL;
+}
+
+/**
+ * liberarListaComunas: Libera toda la lista de comunas.
+ */
+void liberarListaComunas(struct comuna* lista){
+    if(lista==NULL){
+        return;
+    }
+    struct comuna* actual = lista;
+    struct comuna* siguiente;
+    do{
+        siguiente = actual->siguiente;
+        liberarComuna(actual);
+        actual = siguiente;
+    }while(actual!=lista);
+}
+
+/**
+ * calcularTurnosPorDia: Calcula los turnos disponibles por dia.
+ * Se calcula como: totalComunas / 10, con minimo 2 y maximo 10.
+ */
+int calcularTurnosPorDia(int totalComunas){
+    int turnos = totalComunas / 10;
+    if(turnos < 2){
+        turnos = 2;
+    }
+    if(turnos > 10){
+        turnos = 10;
+    }
+    return turnos;
+}
+
+/**
+ * guardarRecord: Guarda el record de dias en un archivo.
+ */
+void guardarRecord(){
+    FILE* archivo = fopen("record.txt", "w");
+    if(archivo==NULL){
+        printf("Error: no se pudo guardar el record.\n");
+        return;
+    }
+    fprintf(archivo, "%d\n", estado.record_dias);
+    fclose(archivo);
+}
+
+/**
+ * cargarRecord: Carga el record de dias desde un archivo.
+ */
+void cargarRecord(){
+    FILE* archivo = fopen("record.txt", "r");
+    if(archivo==NULL){
+        estado.record_dias = 0;
+        return;
+    }
+    fscanf(archivo, "%d", &estado.record_dias);
+    fclose(archivo);
+}
+
+/**
+ * aumentarValores: Aumenta los bienes de una comuna por transferencia.
+ * El aumento es proporcional a la cantidad transferida (cantidad * 0.1).
+ * Los servicios ya no se aumentan porque son conocimiento, no recursos.
+ */
+void aumentarValores(struct comuna* comuna, int cantidad){
+    if(comuna==NULL || cantidad<=0){
+        return;
+    }
+    int aumentoBienes = (int)(cantidad * 0.1);
+    if(aumentoBienes < 1){
+        aumentoBienes = 1;
+    }
+    struct bien* bien = comuna->bienes;
+    while(bien!=NULL){
+        bien->actualCantidad = bien->actualCantidad + aumentoBienes;
+        if(bien->actualCantidad > bien->maximaCantidad){
+            bien->actualCantidad = bien->maximaCantidad;
+        }
+        bien = bien->siguiente;
+    }
+    printf("Aumento: +%d bienes\n", aumentoBienes);
+}
+
+/**
+ * mostrarResumen: Muestra un resumen de todas las comunas.
+ * Muestra nombre, indices y cantidad de personas de each comuna.
+ */
+void mostrarResumen(struct comuna* lista){
+    if(lista==NULL){
+        printf("No hay comunas.\n");
+        return;
+    }
+    printf("\n");
+    printf("########################################\n");
+    printf("#  RESUMEN DE COMUNAS\n");
+    printf("########################################\n");
+    struct comuna* actual = lista;
+    int contador = 1;
+    do{
+        printf("#  %d. %-15s N:%5.1f%% S:%5.1f%% P:%5.1f%% Personas:%d\n",
+               contador, actual->nombre, actual->necesidad, actual->satisfaccion, actual->pobreza, contarPersonas(actual));
+        contador = contador + 1;
+        actual = actual->siguiente;
+    }while(actual!=lista);
+    printf("########################################\n");
+}
+
+/**
+ * mostrarMenu: Muestra el menu de opciones del jugador.
+ */
+void mostrarMenu(){
+    printf("\n");
+    printf("########################################\n");
+    printf("#  MENU PRINCIPAL\n");
+    printf("########################################\n");
+    printf("#  [1] Ver resumen de comunas\n");
+    printf("#  [2] Realizar transferencia\n");
+    printf("#  [3] Ver detalle de comuna\n");
+    printf("#  [4] Finalizar dia\n");
+    printf("########################################\n");
+    printf("\n");
+    printf("Selecciona una opcion: ");
+}
+
+/**
+ * turnoDia: Maneja el turno del dia (jugador realiza transferencias).
+ */
+void turnoDia(struct comuna* lista){
+    if(lista==NULL){
+        return;
+    }
+    int turnos = calcularTurnosPorDia(contarComunas(lista));
+    printf("\nTienes %d turnos para realizar transferencias.\n", turnos);
+    while(turnos>0){
+        mostrarResumen(lista);
+        mostrarMenu();
+        int opcion;
+        scanf("%d", &opcion);
+        if(opcion==1){
+            mostrarResumen(lista);
+        }
+        else if(opcion==2){
+            printf("Selecciona comuna origen: ");
+            int idxOrigen;
+            scanf("%d", &idxOrigen);
+            printf("Selecciona comuna destino: ");
+            int idxDestino;
+            scanf("%d", &idxDestino);
+            if(idxOrigen<1 || idxDestino<1 || idxOrigen>contarComunas(lista) || idxDestino>contarComunas(lista)){
+                printf("Indice invalido.\n");
+                continue;
+            }
+            struct comuna* origen = lista;
+            for(int i=1; i<idxOrigen; i++){
+                origen = origen->siguiente;
+            }
+            struct comuna* destino = lista;
+            for(int i=1; i<idxDestino; i++){
+                destino = destino->siguiente;
+            }
+            if(origen==destino){
+                printf("No puedes transferir a la misma comuna.\n");
+                continue;
+            }
+            if(origen->siguiente!=destino && origen->anterior!=destino){
+                printf("Las comunas no son vecinas.\n");
+                continue;
+            }
+            printf("\nInventario de %s:\n", origen->nombre);
+            struct bien* bienActual = origen->bienes;
+            int contadorBien = 1;
+            while(bienActual!=NULL){
+                printf("  [%d] %s (%d/%d)\n", contadorBien, bienActual->nombre, bienActual->actualCantidad, bienActual->maximaCantidad);
+                contadorBien = contadorBien + 1;
+                bienActual = bienActual->siguiente;
+            }
+            printf("\nSelecciona bien (numero): ");
+            int idxBien;
+            scanf("%d", &idxBien);
+            if(idxBien<1 || idxBien>contarBienes(origen)){
+                printf("Numero invalido.\n");
+                continue;
+            }
+            char* nombreBien = NULL;
+            struct bien* actual = origen->bienes;
+            for(int i=1; i<idxBien && actual!=NULL; i++){
+                actual = actual->siguiente;
+            }
+            if(actual!=NULL){
+                nombreBien = actual->nombre;
+            }
+            printf("Cantidad: ");
+            int cantidad;
+            scanf("%d", &cantidad);
+            int exito = realizarTransferencia(origen, destino, nombreBien, cantidad);
+            if(exito==1){
+                aumentarValores(origen, cantidad);
+                aumentarValores(destino, cantidad);
+                turnos = turnos - 1;
+            }
+        }
+        else if(opcion==3){
+            printf("Selecciona comuna: ");
+            int idx;
+            scanf("%d", &idx);
+            if(idx<1 || idx>contarComunas(lista)){
+                printf("Indice invalido.\n");
+                continue;
+            }
+            struct comuna* seleccionada = lista;
+            for(int i=1; i<idx; i++){
+                seleccionada = seleccionada->siguiente;
+            }
+            mostrarComuna(seleccionada);
+            mostrarBienes(seleccionada);
+            mostrarServicios(seleccionada);
+        }
+        else if(opcion==4){
+            return;
+        }
+        else{
+            printf("Opcion invalida.\n");
+        }
+    }
+}
+
+/**
+ * turnoNoche: Maneja el turno de la noche (consumo, emergencias, disoluciones).
+ */
+void turnoNoche(struct comuna** lista){
+    printf("\n");
+    printf("########################################\n");
+    printf("#  NOCHE\n");
+    printf("########################################\n");
+    aplicarConsumoNocturno(*lista);
+    verificarEmergencias(*lista);
+    verificarDisoluciones(lista);
+    recalcularIndices(*lista);
+    actualizarPobreza(*lista);
+    printf("Noche completada.\n");
+}
+
+
+
+/**
+ * realizarTransferencia: Transfiere un bien de una comuna a otra vecina.
+ * Verifica que sean vecinas, que haya suficiente cantidad y descuenta del origen.
+ */
+int realizarTransferencia(struct comuna* origen, struct comuna* destino, char* bien, int cantidad){
+    if(origen==NULL || destino==NULL || bien==NULL || cantidad<=0){
+        printf("Esos no son parametros para transferencia.\n");
+        return 0;
+    }
+    if(estado.transferencias_bloqueadas){
+        printf("Transferencia bloqueada por emergencia.\n");
+        return 0;
+    }
+    if(origen->siguiente!=destino && origen->anterior!=destino){
+        printf("Estimado/a, las comunas no son vecinas.\n");
+        return 0;
+    }
+    struct bien* actual = origen->bienes;
+    while(actual!=NULL){
+        if(strcmp(actual->nombre, bien)==0){
+            if(actual->actualCantidad<cantidad){
+                printf("Claramente no hay suficiente %s en %s.\n", bien, origen->nombre);
+                return 0;
+            }
+            actual->actualCantidad = actual->actualCantidad - cantidad;
+            printf("Transferencia exitosa, todos ganan: %d de %s de %s a %s\n", cantidad, bien, origen->nombre, destino->nombre);
+            return 1;
+        }
+        actual = actual->siguiente;
+    }
+    printf("Sinceramente no se encontro el bien '%s' en %s.\n", bien, origen->nombre);
+    return 0;
+}
+
+/**
+ * verificarDisoluciones: Verifica si alguna comuna debe disolverse.
+ * Una comuna se disuelve si se queda sin agua y comida.
+ * Las personas pasan a personas_fuera y aumenta la pobreza global.
+ */
+void verificarDisoluciones(struct comuna** lista){
+    if(lista==NULL || *lista==NULL){
+        return;
+    }
+    struct comuna* actual = *lista;
+    struct comuna* siguiente;
+    do{
+        siguiente = actual->siguiente;
+        int tieneAgua = 0;
+        int tieneComida = 0;
+        struct bien* bien = actual->bienes;
+        while(bien!=NULL){
+            if(strcmp(bien->nombre, "Agua potable")==0 && bien->actualCantidad>0){
+                tieneAgua = 1;
+            }
+            if(strcmp(bien->nombre, "Alimento")==0 && bien->actualCantidad>0){
+                tieneComida = 1;
+            }
+            bien = bien->siguiente;
+        }
+        if(tieneAgua==0 && tieneComida==0){
+            int personas = contarPersonas(actual);
+            estado.personas_fuera = estado.personas_fuera + personas;
+            printf("Comuna '%s' se ha disuelto! %d Ahora tenemos nuevos vagabundos.\n", actual->nombre, personas);
+            if(actual->siguiente==actual){
+                liberarComuna(actual);
+                *lista = NULL;
+                return;
+            }
+            actual->anterior->siguiente = actual->siguiente;
+            actual->siguiente->anterior = actual->anterior;
+            if(actual==*lista){
+                *lista = actual->siguiente;
+            }
+            liberarComuna(actual);
+            actual = NULL;
+        }
+        actual = siguiente;
+    }while(actual!=*lista && *lista!=NULL);
+}
