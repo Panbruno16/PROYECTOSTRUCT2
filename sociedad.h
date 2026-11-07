@@ -52,6 +52,8 @@ struct persona {
  * Estructura que representa una comuna en la sociedad.
  * Tiene sus bienes, sus habitantes y los indices de la sociedad.
  * El indice de reciprocidad mide el balance entre regalos dados y recibidos.
+ * El campo administrada marca las 3 comunas que maneja el jugador.
+ * Si administrada es 1 la comuna es del jugador, si es 0 es autonoma.
  */
 struct comuna {
     char nombre[50];
@@ -61,6 +63,7 @@ struct comuna {
     float satisfaccion;
     float pobreza;
     float reciprocidad;
+    int administrada;
     struct comuna* siguiente;
     struct comuna* anterior;
 };
@@ -151,6 +154,7 @@ int migrarPersona(struct comuna* origen, struct comuna* destino, char* nombre);
  * Recibe la cantidad de comunas, oficios del catalogo y bienes.
  * Las 500 personas se reparten aleatoriamente entre las comunas.
  * Cada persona tiene un 30% de probabilidad de recibir un oficio al azar.
+ * Las primeras 3 comunas quedan marcadas como administradas por el jugador.
  * Retorna la lista de comunas creadas.
  */
 struct comuna* crearComunas(char* nombreArchivo, int cantidad, int numServicios, int numBienes);
@@ -166,6 +170,13 @@ void agregarComuna(struct comuna** lista, char* nombre);
  * Recorre la lista circular y retorna el conteo total.
  */
 int contarComunas(struct comuna* lista);
+
+/**
+ * contarAdministradas: Cuenta las comunas que maneja el jugador.
+ * Recorre la lista circular y cuenta las que tienen administrada en 1.
+ * Si el jugador pierde sus 3 comunas el juego termina.
+ */
+int contarAdministradas(struct comuna* lista);
 
 /**
  * inicializarSociedad: Inicializa todas las comunas con personas, bienes y servicios.
@@ -229,6 +240,7 @@ int realizarTransferencia(struct comuna* origen, struct comuna* destino, char* b
  * Parte de sus personas migra a comunas vecinas con sus oficios.
  * La minoria se queda sin hogar y sube la pobreza global.
  * Los bienes de la comuna se pierden. La quita de la lista circular.
+ * Si la comuna era del jugador se pierde sin reposicion.
  */
 void disolverComuna(struct comuna** lista, struct comuna* comuna);
 

@@ -29,11 +29,11 @@ int main(){
 
     printf(CYAN "\nConfiguracion inicial:\n" RESET);
 
-    printf("Cantidad de comunas (2-50): ");
+    printf("Cantidad de comunas (3-50): ");
     int numComunas;
     scanf("%d", &numComunas);
-    if(numComunas < 2){
-        numComunas = 2;
+    if(numComunas < 3){
+        numComunas = 3;
     }
     if(numComunas > 50){
         numComunas = 50;
@@ -69,6 +69,7 @@ int main(){
     inicializarSociedad(cabeza);
 
     printf(GREEN "Comunas creadas: %d\n" RESET, contarComunas(cabeza));
+    printf(GREEN "Tus comunas: %d\n" RESET, contarAdministradas(cabeza));
 
     int jugando = 1;
     while(jugando){
@@ -79,8 +80,9 @@ int main(){
 
         turnoNoche(&cabeza);
 
-        if(cabeza==NULL || contarComunas(cabeza)==0){
+        if(cabeza==NULL || contarAdministradas(cabeza)==0){
             printf(RED BOLD "\nGAME OVER\n" RESET);
+            printf(YELLOW "Perdiste tus 3 comunas, no hay reposicion.\n" RESET);
             printf(YELLOW "Has sobrevivido %d dias.\n" RESET, estado.dia_actual);
             jugando = 0;
         }

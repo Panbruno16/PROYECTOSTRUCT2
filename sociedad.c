@@ -15,6 +15,7 @@ struct juego estado;
 /**
  * crearComuna: Crea una nueva comuna con el nombre especificado.
  * Inicializa los indices en 0 y los punteros de la lista circular apuntan a si mismo.
+ * Nace como comuna autonoma (administrada en 0).
  */
 struct comuna* crearComuna(char* nombre){
     struct comuna* nueva = calloc(1, sizeof(struct comuna));
@@ -23,6 +24,7 @@ struct comuna* crearComuna(char* nombre){
     nueva->satisfaccion = 0.0;
     nueva->pobreza = 0.0;
     nueva->reciprocidad = 0.0;
+    nueva->administrada = 0;
     nueva->siguiente = nueva;
     nueva->anterior = nueva;
     return nueva;
@@ -347,6 +349,9 @@ int agregarBienes(struct comuna* comuna, char* nombreArchivo){
 /**
  * crearComunas: Crea varias comunas y las conecta en lista circular doble.
  * Lee nombres del archivo y crea una comuna por cada nombre.
+ * Las 500 personas se reparten aleatoriamente entre las comunas.
+ * Cada persona tiene un 30% de probabilidad de recibir un oficio al azar.
+ * Las primeras 3 comunas quedan marcadas como administradas por el jugador.
  * Retorna la lista de comunas creadas.
  */
 struct comuna* crearComunas(char* nombreArchivo, int cantidad, int numServicios, int numBienes){
@@ -431,6 +436,18 @@ struct comuna* crearComunas(char* nombreArchivo, int cantidad, int numServicios,
         }
         fclose(archivoPersonas);
     }
+    // Las primeras 3 comunas creadas son las que maneja el jugador
+    struct comuna* marcada = lista;
+    int administradas = 0;
+    if(marcada!=NULL){
+        do{
+            if(administradas < 3){
+                marcada->administrada = 1;
+                administradas = administradas + 1;
+            }
+            marcada = marcada->siguiente;
+        }while(marcada!=lista && administradas < 3);
+    }
     return lista;
 }
 
@@ -469,6 +486,26 @@ int contarComunas(struct comuna* lista){
     struct comuna* actual = lista;
     do{
         contador = contador + 1;
+        actual = actual->siguiente;
+    }while(actual!=lista);
+    return contador;
+}
+
+/**
+ * contarAdministradas: Cuenta las comunas que maneja el jugador.
+ * Recorre la lista circular y cuenta las que tienen administrada en 1.
+ * El jugador empieza con 3 y no tiene reposicion.
+ */
+int contarAdministradas(struct comuna* lista){
+    if(lista==NULL){
+        return 0;
+    }
+    int contador = 0;
+    struct comuna* actual = lista;
+    do{
+        if(actual->administrada==1){
+            contador = contador + 1;
+        }
         actual = actual->siguiente;
     }while(actual!=lista);
     return contador;
@@ -798,7 +835,8 @@ void aumentarValores(struct comuna* comuna, int cantidad){
 
 /**
  * mostrarResumen: Muestra un resumen de todas las comunas.
- * Muestra nombre, indices y cantidad de personas de each comuna.
+ * Muestra nombre, indices y cantidad de personas de cada comuna.
+ * Marca con TUYA las comunas que maneja el jugador y con AUTO las autonomas.
  */
 void mostrarResumen(struct comuna* lista){
     if(lista==NULL){
@@ -812,8 +850,15 @@ void mostrarResumen(struct comuna* lista){
     struct comuna* actual = lista;
     int contador = 1;
     do{
-        printf("#  %d. %-15s N:%5.1f%% S:%5.1f%% P:%5.1f%% Personas:%d\n",
-               contador, actual->nombre, actual->necesidad, actual->satisfaccion, actual->pobreza, contarPersonas(actual));
+        char marca[10];
+        if(actual->administrada==1){
+            strcpy(marca, "TUYA");
+        }
+        else{
+            strcpy(marca, "AUTO");
+        }
+        printf("#  %d. [%s] %-15s N:%5.1f%% S:%5.1f%% P:%5.1f%% Personas:%d\n",
+               contador, marca, actual->nombre, actual->necesidad, actual->satisfaccion, actual->pobreza, contarPersonas(actual));
         contador = contador + 1;
         actual = actual->siguiente;
     }while(actual!=lista);
@@ -875,6 +920,11 @@ void turnoDia(struct comuna* lista){
             }
             if(origen==destino){
                 printf("No puedes transferir a la misma comuna.\n");
+                continue;
+            }
+            if(origen->administrada==0 || destino->administrada==0){
+                printf("Solo puedes transferir entre tus 3 comunas.\n");
+                printf("Las demas comunas se manejan de forma autonoma.\n");
                 continue;
             }
             if(origen->siguiente!=destino && origen->anterior!=destino){
@@ -999,6 +1049,7 @@ int realizarTransferencia(struct comuna* origen, struct comuna* destino, char* b
  * Parte de sus personas migra a comunas vecinas con sus oficios.
  * La minoria se queda sin hogar y sube la pobreza global.
  * Los bienes de la comuna se pierden. La quita de la lista circular.
+ * Si la comuna era del jugador se pierde sin reposicion.
  */
 void disolverComuna(struct comuna** lista, struct comuna* comuna){
     if(lista==NULL || comuna==NULL){
@@ -1045,6 +1096,17 @@ void disolverComuna(struct comuna** lista, struct comuna* comuna){
     printf("#  LA COMUNA %s SE HA DISUELTO\n", comuna->nombre);
     if(hayVecina==0){
         printf("#  Era la ultima comuna, no hay donde migrar\n");
+    }
+    if(comuna->administrada==1){
+        int restantes = contarAdministradas(*lista) - 1;
+        printf("#  Era una comuna de tu gestion\n");
+        printf("#  No hay reposicion, perdiste una de tus 3\n");
+        if(restantes==1){
+            printf("#  Te queda 1 comuna\n");
+        }
+        else{
+            printf("#  Te quedan %d comunas\n", restantes);
+        }
     }
 
     printf("#  %d personas migraron a comunas vecinas\n", migraron);
