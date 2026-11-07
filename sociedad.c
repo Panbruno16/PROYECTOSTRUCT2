@@ -326,6 +326,19 @@ struct comuna* crearComunas(char* nombreArchivo, int cantidad, int numServicios,
         }
         fclose(archivoBienes);
     }
+    // Catalogo de oficios: se lee el archivo de servicios para tenerlos disponibles
+    char catalogo[20][50];
+    int totalOficios = 0;
+    FILE* archivoServicios = fopen("servicios", "r");
+    if(archivoServicios != NULL){
+        char oficio[50];
+        while(fgets(oficio, 50, archivoServicios) && totalOficios < numServicios && totalOficios < 20){
+            oficio[strcspn(oficio, "\n")] = 0;
+            strcpy(catalogo[totalOficios], oficio);
+            totalOficios = totalOficios + 1;
+        }
+        fclose(archivoServicios);
+    }
     FILE* archivoPersonas = fopen("personas", "r");
     if(archivoPersonas != NULL){
         char persona[50];
@@ -338,6 +351,13 @@ struct comuna* crearComunas(char* nombreArchivo, int cantidad, int numServicios,
                 actual = actual->siguiente;
             }
             agregarPersona(actual, persona);
+            // La persona recien agregada queda al inicio de la lista de habitantes
+            int probabilidad = rand() % 100;
+            if(probabilidad < 30 && totalOficios > 0){
+                int indiceOficio = rand() % totalOficios;
+                agregarServicioAPersona(actual->habitantes, catalogo[indiceOficio]);
+            }
+
             agregadas = agregadas + 1;
         }
         fclose(archivoPersonas);

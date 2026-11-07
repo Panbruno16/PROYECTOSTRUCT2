@@ -6,6 +6,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include "sociedad.h"
 
 #define RESET   "\033[0m"
@@ -22,6 +23,7 @@
  * Inicia el juego y maneja el ciclo de dias.
  */
 int main(){
+    srand(time(NULL));
     cargarRecord();
     printf(CYAN BOLD "Record actual: %d dias\n" RESET, estado.record_dias);
 
@@ -37,7 +39,7 @@ int main(){
         numComunas = 50;
     }
 
-    printf("Cantidad de servicios (1-20): ");
+    printf("Cantidad de oficios en el catalogo (1-20): ");
     int numServicios;
     scanf("%d", &numServicios);
     if(numServicios < 1){

@@ -140,8 +140,9 @@ void agregarServicioAPersona(struct persona* persona, char* nombre);
 /**
  * crearComunas: Crea varias comunas y las conecta en lista circular doble.
  * Lee nombres del archivo y crea una comuna por cada nombre.
- * Recibe la cantidad de comunas, servicios y bienes.
+ * Recibe la cantidad de comunas, oficios del catalogo y bienes.
  * Las 500 personas se reparten aleatoriamente entre las comunas.
+ * Cada persona tiene un 30% de probabilidad de recibir un oficio al azar.
  * Retorna la lista de comunas creadas.
  */
 struct comuna* crearComunas(char* nombreArchivo, int cantidad, int numServicios, int numBienes);
