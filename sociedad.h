@@ -175,14 +175,16 @@ void inicializarSociedad(struct comuna* lista);
 
 /**
  * calcularNecesidad: Calcula el indice de necesidad de una comuna.
- * Recorre los bienes y calcula el promedio de (actual/maxima).
- * Alto = tiene recursos, bajo = necesita recursos.
+ * Recorre los bienes y calcula el promedio de (actual/maxima) de llenado.
+ * La necesidad es 100 menos ese llenado: alto = le falta recursos,
+ * bajo = tiene recursos. Asi la comuna se disuelve cuando la necesidad es muy alta.
  */
 float calcularNecesidad(struct comuna* comuna);
 
 /**
  * calcularSatisfaccion: Calcula el indice de satisfaccion de una comuna.
- * Considera el indice de necesidad y el promedio de servicios disponibles.
+ * Considera el llenado de bienes y el porcentaje de personas con oficio.
+ * Mas recursos y mas gente con oficio = mas satisfecha.
  */
 float calcularSatisfaccion(struct comuna* comuna);
 
@@ -223,9 +225,18 @@ void verificarEmergencias(struct comuna* lista);
 int realizarTransferencia(struct comuna* origen, struct comuna* destino, char* bien, int cantidad);
 
 /**
+ * disolverComuna: Disuelve una comuna de la sociedad.
+ * Parte de sus personas migra a comunas vecinas con sus oficios.
+ * La minoria se queda sin hogar y sube la pobreza global.
+ * Los bienes de la comuna se pierden. La quita de la lista circular.
+ */
+void disolverComuna(struct comuna** lista, struct comuna* comuna);
+
+/**
  * verificarDisoluciones: Verifica si alguna comuna debe disolverse.
- * Una comuna se disuelve si se queda sin agua y comida.
- * Las personas pasan a personas_fuera y aumenta la pobreza global.
+ * Se disuelve si la necesidad es muy alta o la satisfaccion es muy baja.
+ * Sus personas se reparten entre migracion y pobreza.
+ * Si la lista queda vacia se vuelve NULL.
  */
 void verificarDisoluciones(struct comuna** lista);
 

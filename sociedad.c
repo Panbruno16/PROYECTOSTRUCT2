@@ -490,16 +490,18 @@ void inicializarSociedad(struct comuna* lista){
         totalPersonas = totalPersonas + contarPersonas(actual);
         actual = actual->siguiente;
     }while(actual!=lista);
+    recalcularIndices(lista);
     printf("Sociedad inicializada: %d comunas, %d personas totales\n", contarComunas(lista), totalPersonas);
 }
 
 /**
  * calcularNecesidad: Calcula el indice de necesidad de una comuna.
- * Recorre los bienes y calcula el promedio de (actual/maxima).
- * Alto = tiene recursos, bajo = necesita recursos.
+ * Recorre los bienes y calcula el promedio de (actual/maxima) de llenado.
+ * La necesidad es 100 menos ese llenado: alto = le falta recursos,
+ * bajo = tiene recursos. Asi se disuelve cuando la necesidad es muy alta.
  */
 float calcularNecesidad(struct comuna* comuna){
-    if(comuna==NULL || comuna->bienes==NULL){
+    if(comuna==NULL){
         return 0.0;
     }
     float suma = 0.0;
@@ -513,15 +515,17 @@ float calcularNecesidad(struct comuna* comuna){
         actual = actual->siguiente;
     }
     if(contador==0){
-        return 0.0;
+        return 100.0;
     }
-    return (suma/contador)*100.0;
+    float llenado = (suma/contador)*100.0;
+    float necesidad = 100.0 - llenado;
+    return necesidad;
 }
 
 /**
  * calcularSatisfaccion: Calcula el indice de satisfaccion de una comuna.
- * Considera el indice de necesidad y el porcentaje de personas que sabe un oficio.
- * Mientras mas gente con oficio haya, mas satisfecha esta la comuna.
+ * Considera el llenado de bienes (100 - necesidad) y el porcentaje de personas con oficio.
+ * Mas recursos y mas gente con oficio = mas satisfecha.
  */
 float calcularSatisfaccion(struct comuna* comuna){
     if(comuna==NULL){
@@ -543,7 +547,7 @@ float calcularSatisfaccion(struct comuna* comuna){
     else{
         ratioServicios = 0.0;
     }
-    float satisfaccion = (comuna->necesidad*0.6)+(ratioServicios*40.0);
+    float satisfaccion = ((100.0 - comuna->necesidad)*0.6)+(ratioServicios*40.0);
     if(satisfaccion>100.0){
         satisfaccion = 100.0;
     }
@@ -945,7 +949,10 @@ void turnoNoche(struct comuna** lista){
     printf("########################################\n");
     aplicarConsumoNocturno(*lista);
     verificarEmergencias(*lista);
+    // Recalculo antes de disolver para decidir con indices frescos del consumo
+    recalcularIndices(*lista);
     verificarDisoluciones(lista);
+    // Recalculo despues para reflejar a las personas que migraron
     recalcularIndices(*lista);
     actualizarPobreza(*lista);
     printf("Noche completada.\n");
@@ -988,47 +995,115 @@ int realizarTransferencia(struct comuna* origen, struct comuna* destino, char* b
 }
 
 /**
+ * disolverComuna: Disuelve una comuna de la sociedad.
+ * Parte de sus personas migra a comunas vecinas con sus oficios.
+ * La minoria se queda sin hogar y sube la pobreza global.
+ * Los bienes de la comuna se pierden. La quita de la lista circular.
+ */
+void disolverComuna(struct comuna** lista, struct comuna* comuna){
+    if(lista==NULL || comuna==NULL){
+        return;
+    }
+
+    int total = contarPersonas(comuna);
+    int pobres = (total * 30) / 100;
+    int migran = total - pobres;
+    int migraron = 0;
+    int sinHogar = 0;
+
+    struct comuna* vecinaIzquierda = comuna->anterior;
+    struct comuna* vecinaDerecha = comuna->siguiente;
+    int hayVecina = 1;
+    if(vecinaDerecha==comuna){
+        hayVecina = 0;
+    }
+
+    // Migrar la mayoria a las comunas vecinas, una persona a una
+    while(migraron < migran && hayVecina==1 && comuna->habitantes!=NULL){
+        struct comuna* destino = vecinaDerecha;
+        int azar = rand() % 2;
+        if(azar==1 && vecinaIzquierda!=vecinaDerecha){
+            destino = vecinaIzquierda;
+        }
+
+        char nombre[50];
+        strcpy(nombre, comuna->habitantes->nombre);
+        int movida = migrarPersona(comuna, destino, nombre);
+        if(movida==1){
+            migraron = migraron + 1;
+        }
+        else{
+            break;
+        }
+    }
+
+    sinHogar = contarPersonas(comuna);
+    estado.personas_fuera = estado.personas_fuera + sinHogar;
+
+    printf("\n");
+    printf("########################################\n");
+    printf("#  LA COMUNA %s SE HA DISUELTO\n", comuna->nombre);
+    if(hayVecina==0){
+        printf("#  Era la ultima comuna, no hay donde migrar\n");
+    }
+
+    printf("#  %d personas migraron a comunas vecinas\n", migraron);
+    printf("#  %d personas se quedaron sin hogar\n", sinHogar);
+    printf("#  Sus bienes quedaron abandonados\n");
+    printf("########################################\n");
+
+    // Quitar la comuna de la lista circular doble
+    if(comuna->siguiente==comuna){
+        *lista = NULL;
+    }
+    else{
+        comuna->anterior->siguiente = comuna->siguiente;
+        comuna->siguiente->anterior = comuna->anterior;
+        if(comuna==*lista){
+            *lista = comuna->siguiente;
+        }
+    }
+
+    liberarComuna(comuna);
+    comuna = NULL;
+}
+
+/**
  * verificarDisoluciones: Verifica si alguna comuna debe disolverse.
- * Una comuna se disuelve si se queda sin agua y comida.
- * Las personas pasan a personas_fuera y aumenta la pobreza global.
+ * Se disuelve si la necesidad es muy alta o la satisfaccion es muy baja.
+ * Sus personas se reparten entre migracion y pobreza.
+ * Si la lista queda vacia se vuelve NULL.
  */
 void verificarDisoluciones(struct comuna** lista){
     if(lista==NULL || *lista==NULL){
         return;
     }
+
+    float necesidadMaxima = 80.0;
+    float satisfaccionMinima = 20.0;
+    int total = contarComunas(*lista);
+    int procesadas = 0;
     struct comuna* actual = *lista;
-    struct comuna* siguiente;
-    do{
-        siguiente = actual->siguiente;
-        int tieneAgua = 0;
-        int tieneComida = 0;
-        struct bien* bien = actual->bienes;
-        while(bien!=NULL){
-            if(strcmp(bien->nombre, "Agua potable")==0 && bien->actualCantidad>0){
-                tieneAgua = 1;
-            }
-            if(strcmp(bien->nombre, "Alimento")==0 && bien->actualCantidad>0){
-                tieneComida = 1;
-            }
-            bien = bien->siguiente;
+
+    while(procesadas < total && *lista!=NULL && actual!=NULL){
+        struct comuna* siguiente = actual->siguiente;
+        int disolver = 0;
+        if(actual->necesidad >= necesidadMaxima){
+            disolver = 1;
         }
-        if(tieneAgua==0 && tieneComida==0){
-            int personas = contarPersonas(actual);
-            estado.personas_fuera = estado.personas_fuera + personas;
-            printf("Comuna '%s' se ha disuelto! %d Ahora tenemos nuevos vagabundos.\n", actual->nombre, personas);
-            if(actual->siguiente==actual){
-                liberarComuna(actual);
-                *lista = NULL;
-                return;
-            }
-            actual->anterior->siguiente = actual->siguiente;
-            actual->siguiente->anterior = actual->anterior;
-            if(actual==*lista){
-                *lista = actual->siguiente;
-            }
-            liberarComuna(actual);
-            actual = NULL;
+        if(actual->satisfaccion <= satisfaccionMinima){
+            disolver = 1;
         }
+
+        if(disolver==1){
+            disolverComuna(lista, actual);
+        }
+
+        procesadas = procesadas + 1;
+        if(*lista==NULL){
+            return;
+        }
+
         actual = siguiente;
-    }while(actual!=*lista && *lista!=NULL);
+    }
 }
