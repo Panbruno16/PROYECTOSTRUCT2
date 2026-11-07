@@ -106,8 +106,9 @@ int contarServicios(struct comuna* comuna);
 void mostrarBienes(struct comuna* comuna);
 
 /**
- * mostrarServicios: Muestra en pantalla los oficios de una comuna.
+ * mostrarServicios: Muestra en pantalla los oficios de cada persona de una comuna.
  * Recorre los habitantes e imprime los servicios que sabe cada persona.
+ * Incluye un resumen con el porcentaje de personas que al menos sabe un oficio.
  */
 void mostrarServicios(struct comuna* comuna);
 

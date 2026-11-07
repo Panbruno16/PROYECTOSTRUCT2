@@ -30,7 +30,7 @@ struct comuna* crearComuna(char* nombre){
 
 /**
  * mostrarComuna: Muestra en pantalla la informacion de una comuna.
- * Imprime el nombre y los indices de necesidad, satisfaccion y pobreza.
+ * Imprime el nombre y los indices de necesidad, satisfaccion, pobreza y reciprocidad.
  */
 void mostrarComuna(struct comuna* comuna){
     if(comuna==NULL){
@@ -43,6 +43,7 @@ void mostrarComuna(struct comuna* comuna){
     printf("#  Necesidad:    %.2f%%\n", comuna->necesidad);
     printf("#  Satisfaccion: %.2f%%\n", comuna->satisfaccion);
     printf("#  Pobreza:      %.2f%%\n", comuna->pobreza);
+    printf("#  Reciprocidad: %.2f\n", comuna->reciprocidad);
     printf("########################################\n");
 }
 
@@ -170,31 +171,53 @@ void mostrarBienes(struct comuna* comuna){
 }
 
 /**
- * mostrarServicios: Muestra en pantalla los oficios de una comuna.
+ * mostrarServicios: Muestra en pantalla los oficios de cada persona de una comuna.
  * Recorre los habitantes e imprime los servicios que sabe cada persona.
+ * Muestra un resumen con el porcentaje de gente que al menos sabe un oficio.
  */
 void mostrarServicios(struct comuna* comuna){
     if(comuna==NULL){
         return;
     }
 
+    int totalPersonas = contarPersonas(comuna);
+    int personasConOficio = 0;
+    struct persona* recorrido = comuna->habitantes;
+    while(recorrido!=NULL){
+        if(recorrido->servicios!=NULL){
+            personasConOficio = personasConOficio + 1;
+        }
+
+        recorrido = recorrido->siguiente;
+    }
+    float porcentaje = 0.0;
+    if(totalPersonas>0){
+        porcentaje = ((float)personasConOficio * 100.0) / (float)totalPersonas;
+    }
+
     printf("\n");
     printf("########################################\n");
     printf("#  OFICIOS DE: %s\n", comuna->nombre);
+    printf("#  Con oficio: %d/%d (%.1f%%)\n", personasConOficio, totalPersonas, porcentaje);
     printf("########################################\n");
     struct persona* personaActual = comuna->habitantes;
+    int contador = 1;
     while(personaActual!=NULL){
-        printf("#  %s:\n", personaActual->nombre);
+        printf("#  %d. %s:", contador, personaActual->nombre);
         struct servicio* servicioActual = personaActual->servicios;
         if(servicioActual==NULL){
-            printf("#    no sabe hacer nada\n");
+            printf(" no sabe hacer nada\n");
+        }
+        else{
+            printf("\n");
+            while(servicioActual!=NULL){
+                printf("#      %s\n", servicioActual->nombre);
+                servicioActual = servicioActual->siguiente;
+            }
+
         }
 
-        while(servicioActual!=NULL){
-            printf("#    %s\n", servicioActual->nombre);
-            servicioActual = servicioActual->siguiente;
-        }
-
+        contador = contador + 1;
         personaActual = personaActual->siguiente;
     }
 
