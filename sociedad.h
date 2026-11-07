@@ -139,6 +139,13 @@ int agregarBienes(struct comuna* comuna, char* nombreArchivo);
 void agregarServicioAPersona(struct persona* persona, char* nombre);
 
 /**
+ * migrarPersona: Mueve una persona de una comuna a otra llevandose sus oficios.
+ * Es una funcion auxiliar interna para la logica de disolucion de comunas.
+ * Retorna 1 si la persona encontro destino, 0 si fallo.
+ */
+int migrarPersona(struct comuna* origen, struct comuna* destino, char* nombre);
+
+/**
  * crearComunas: Crea varias comunas y las conecta en lista circular doble.
  * Lee nombres del archivo y crea una comuna por cada nombre.
  * Recibe la cantidad de comunas, oficios del catalogo y bienes.

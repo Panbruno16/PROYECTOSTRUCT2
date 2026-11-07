@@ -87,6 +87,52 @@ void agregarServicioAPersona(struct persona* persona, char* nombre){
 }
 
 /**
+ * migrarPersona: Mueve una persona de una comuna a otra llevandose sus oficios.
+ * Es una funcion auxiliar interna para la logica de disolucion de comunas.
+ * Busca a la persona en el origen, la desenlaza y la enlaza al destino.
+ * Retorna 1 si la persona encontro destino, 0 si fallo.
+ */
+int migrarPersona(struct comuna* origen, struct comuna* destino, char* nombre){
+    if(origen==NULL || destino==NULL || nombre==NULL){
+        return 0;
+    }
+
+    if(origen==destino){
+        return 0;
+    }
+
+    // Buscar la persona en el origen
+    struct persona* anterior = NULL;
+    struct persona* actual = origen->habitantes;
+    while(actual!=NULL){
+        if(strcmp(actual->nombre, nombre)==0){
+            break;
+        }
+
+        anterior = actual;
+        actual = actual->siguiente;
+    }
+
+    if(actual==NULL){
+        return 0;
+    }
+
+    // Desenlazar del origen
+    if(anterior==NULL){
+        origen->habitantes = actual->siguiente;
+    }
+    else{
+        anterior->siguiente = actual->siguiente;
+    }
+
+    // Enlazar al inicio del destino
+    actual->siguiente = destino->habitantes;
+    destino->habitantes = actual;
+
+    return 1;
+}
+
+/**
  * contarPersonas: Cuenta cuantas personas hay en una comuna.
  * Recorre la lista de habitantes y retorna el conteo total.
  */
