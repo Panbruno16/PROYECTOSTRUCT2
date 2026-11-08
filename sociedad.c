@@ -781,13 +781,72 @@ void actualizarPobreza(struct comuna* lista){
 }
 
 /**
+ * bajarBienes: Reduce los bienes de todas las comunas en un porcentaje.
+ * Se usa en las emergencias que anuncian perdida de bienes (temblor e
+ * inundacion). Aunque el porcentaje redondee a cero, si la comuna tiene
+ * bienes pierde al menos una unidad, para que la emergencia siempre se note.
+ */
+void bajarBienes(struct comuna* lista, int porcentaje){
+    if(lista==NULL){
+        return;
+    }
+    struct comuna* actual = lista;
+    do{
+        struct bien* bien = actual->bienes;
+        while(bien!=NULL){
+            int perdida = (bien->actualCantidad * porcentaje) / 100;
+            if(perdida<1 && bien->actualCantidad>0){
+                perdida = 1;
+            }
+            bien->actualCantidad = bien->actualCantidad - perdida;
+            if(bien->actualCantidad<0){
+                bien->actualCantidad = 0;
+            }
+            bien = bien->siguiente;
+        }
+        actual = actual->siguiente;
+    }while(actual!=lista);
+}
+
+/**
+ * perderOficios: Quita un oficio a una parte de las personas de la sociedad.
+ * Se usa en el temblor: la gente perdio sus herramientas y su trabajo.
+ * Cada persona tiene un 20% de probabilidad de perder su primer oficio.
+ * Las personas que no tienen oficio no se ven afectadas.
+ */
+void perderOficios(struct comuna* lista){
+    if(lista==NULL){
+        return;
+    }
+    struct comuna* comunaActual = lista;
+    do{
+        struct persona* personaActual = comunaActual->habitantes;
+        while(personaActual!=NULL){
+            int azar = rand() % 5;
+            if(azar==0 && personaActual->servicios!=NULL){
+                struct servicio* perdido = personaActual->servicios;
+                personaActual->servicios = perdido->siguiente;
+                free(perdido);
+            }
+            personaActual = personaActual->siguiente;
+        }
+        comunaActual = comunaActual->siguiente;
+    }while(comunaActual!=lista);
+}
+
+/**
  * verificarEmergencias: Verifica y aplica emergencias aleatorias.
- * Huelga: probabilidad base 10% + pobreza * 0.3%
- * Vandalos: probabilidad base 5% + pobreza * 0.4%
- * Temblor: probabilidad base 3%
- * Inundacion: probabilidad base 2%
- * Feriado: probabilidad base 4%
- * Presidencia: probabilidad base 3%
+ * Huelga: probabilidad base 10% + pobreza * 0.3%. Bloquea los intercambios
+ *         del dia siguiente, igual que la presidencia.
+ * Vandalos: probabilidad base 5% + pobreza * 0.4%. No hace nada, como dice
+ *           el mensaje, porque no es dia de revision.
+ * Temblor: probabilidad base 3%. Baja los bienes 25% y deja a una parte de
+ *          las personas sin oficio.
+ * Inundacion: probabilidad base 2%. Baja los bienes 40%.
+ * Feriado: probabilidad base 4%. Deja el consumo pausado para la noche
+ *          siguiente y bloquea los intercambios del dia siguiente.
+ * Presidencia: probabilidad base 3%. Bloquea los intercambios del dia
+ *              siguiente.
  */
 void verificarEmergencias(struct comuna* lista){
     if(lista==NULL){
@@ -798,6 +857,7 @@ void verificarEmergencias(struct comuna* lista){
     // Huelga: probabilidad base 10% + pobreza * 0.3%
     float probabilidadHuelga = 0.10+(pobreza*0.003);
     if((float)rand()/RAND_MAX < probabilidadHuelga){
+        estado.transferencias_bloqueadas = 1;
         printf("HUELGA en una comuna! Intercambios bloqueados, pues estan exigiendo aguinaldo.\n");
     }
 
@@ -810,18 +870,23 @@ void verificarEmergencias(struct comuna* lista){
     // Temblor: probabilidad base 3%
     float probabilidadTemblor = 0.03;
     if((float)rand()/RAND_MAX < probabilidadTemblor){
+        bajarBienes(lista, 25);
+        perderOficios(lista);
         printf("TEMBLOR! Los servicios y bienes bajaron, debido a que casi se nos va Panama.\n");
     }
 
     // Inundacion: probabilidad base 2%
     float probabilidadInundacion = 0.02;
     if((float)rand()/RAND_MAX < probabilidadInundacion){
+        bajarBienes(lista, 40);
         printf("INUNDACION! Los bienes bajaron, ahora resulta que vivimos como sirenas.\n");
     }
 
     // Feriado: probabilidad base 4%
     float probabilidadFeriado = 0.04;
     if((float)rand()/RAND_MAX < probabilidadFeriado){
+        estado.transferencias_bloqueadas = 1;
+        estado.consumo_pausado = 1;
         printf("FERIADO! No hay consumo de bienes ni intercambios, todos a la playa.\n");
     }
 
@@ -1252,6 +1317,7 @@ int turnoDia(struct comuna* lista){
  * turnoNoche: Maneja el turno de la noche (consumo, emergencias, disoluciones).
  * Libera al inicio el bloqueo de intercambios de la noche anterior, para que
  * una emergencia solo detenga los intercambios del dia siguiente.
+ * Si hubo feriado, la noche que viene no hay consumo de bienes.
  */
 void turnoNoche(struct comuna** lista){
     printf("\n");
@@ -1259,7 +1325,13 @@ void turnoNoche(struct comuna** lista){
     printf("#  NOCHE\n");
     printf("########################################\n");
     estado.transferencias_bloqueadas = 0;
-    aplicarConsumoNocturno(*lista);
+    if(estado.consumo_pausado==1){
+        printf("Feriado: no hay consumo de bienes esta noche.\n");
+        estado.consumo_pausado = 0;
+    }
+    else{
+        aplicarConsumoNocturno(*lista);
+    }
     verificarEmergencias(*lista);
     // Recalculo antes de disolver para decidir con indices frescos del consumo
     recalcularIndices(*lista);

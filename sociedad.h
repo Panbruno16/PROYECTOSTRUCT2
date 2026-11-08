@@ -11,6 +11,7 @@ struct juego{
     int turnos_disponibles;
     int record_dias;
     int transferencias_bloqueadas;
+    int consumo_pausado;
     float pobreza_global;
 };
 
@@ -265,9 +266,34 @@ float calcularPobrezaGlobal();
 void actualizarPobreza(struct comuna* lista);
 
 /**
+ * bajarBienes: Reduce los bienes de todas las comunas en un porcentaje.
+ * Se usa en las emergencias que anuncian perdida de bienes (temblor e
+ * inundacion). Aunque el porcentaje redondee a cero, si la comuna tiene
+ * bienes pierde al menos una unidad, para que la emergencia siempre se note.
+ */
+void bajarBienes(struct comuna* lista, int porcentaje);
+
+/**
+ * perderOficios: Quita un oficio a una parte de las personas de la sociedad.
+ * Se usa en el temblor: la gente perdio sus herramientas y su trabajo.
+ * Cada persona tiene un 20% de probabilidad de perder su primer oficio.
+ * Las personas que no tienen oficio no se ven afectadas.
+ */
+void perderOficios(struct comuna* lista);
+
+/**
  * verificarEmergencias: Verifica y aplica emergencias aleatorias.
- * Huelga: probabilidad base 10% + pobreza * 0.3%
- * Vandalos: probabilidad base 5% + pobreza * 0.4%
+ * Huelga: probabilidad base 10% + pobreza * 0.3%. Bloquea los intercambios
+ *         del dia siguiente, igual que la presidencia.
+ * Vandalos: probabilidad base 5% + pobreza * 0.4%. No hace nada, como dice
+ *           el mensaje, porque no es dia de revision.
+ * Temblor: probabilidad base 3%. Baja los bienes 25% y deja a una parte de
+ *          las personas sin oficio.
+ * Inundacion: probabilidad base 2%. Baja los bienes 40%.
+ * Feriado: probabilidad base 4%. Deja el consumo pausado para la noche
+ *          siguiente y bloquea los intercambios del dia siguiente.
+ * Presidencia: probabilidad base 3%. Bloquea los intercambios del dia
+ *              siguiente.
  */
 void verificarEmergencias(struct comuna* lista);
 
@@ -355,6 +381,8 @@ int turnoDia(struct comuna* lista);
 
 /**
  * turnoNoche: Maneja el turno de la noche (consumo, emergencias, disoluciones).
+ * Libera el bloqueo de intercambios de la noche anterior y, si hubo feriado,
+ * deja el consumo pausado para esa noche.
  */
 void turnoNoche(struct comuna** lista);
 
