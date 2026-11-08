@@ -149,6 +149,13 @@ void agregarServicioAPersona(struct persona* persona, char* nombre);
 int migrarPersona(struct comuna* origen, struct comuna* destino, char* nombre);
 
 /**
+ * regalarAlAzar: Elige al azar un bien de la comuna y se lo regala a una vecina.
+ * Es una funcion auxiliar interna para el turno de las comunas autonomas.
+ * Retorna 1 si logro regalar, 0 si no pudo.
+ */
+int regalarAlAzar(struct comuna* origen);
+
+/**
  * crearComunas: Crea varias comunas y las conecta en lista circular doble.
  * Lee nombres del archivo y crea una comuna por cada nombre.
  * Recibe la cantidad de comunas, oficios del catalogo y bienes.
@@ -286,9 +293,11 @@ void mostrarResumen(struct comuna* lista);
  */
 void mostrarMenu();
 
-/*
-*turnoDía:
-*/
+/**
+ * turnoComunas: Maneja el turno de las comunas que no administra el jugador.
+ * Cada comuna autonoma elige una accion al azar del 0 al 4.
+ * La accion 1 regala un bien a una comuna vecina.
+ */
 void turnoComunas(struct comuna* lista);
 
 /**

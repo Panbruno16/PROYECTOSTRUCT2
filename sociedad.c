@@ -881,78 +881,83 @@ void mostrarMenu(){
     printf("\n");
     printf("Selecciona una opcion: ");
 }
+
 /**
-*tunrnoComunas: administra de forma aleatoria lo que hagan el resto de comunas en un día
-*/
-void turnoComunas(struct comuna* lista){
-    int min = 0, max = 4;
-    comuna temp = lista;
-    int accion;
-
-    for (int i = 0; i < contarComunas(lista); i += 1){
-        accion = rand() % (max - min + 1) + min;
-        
-        if (temp->administrada == 1 || accion == 0){
-            continue;
+ * regalarAlAzar: Elige al azar un bien de la comuna y se lo regala a una vecina.
+ * Solo funciona si la comuna tiene bienes con cantidad y si no es la unica comuna.
+ * La vecina se elige al azar entre la siguiente y la anterior.
+ * Aumenta los bienes de las dos comunas igual que una transferencia normal.
+ * Retorna 1 si logro regalar, 0 si no pudo.
+ */
+int regalarAlAzar(struct comuna* origen){
+    if(origen==NULL || origen->bienes==NULL){
+        return 0;
+    }
+    if(origen->siguiente==origen){
+        return 0;
+    }
+    struct comuna* destino = origen->siguiente;
+    int vecino = rand() % 2;
+    if(vecino==1){
+        destino = origen->anterior;
+    }
+    int totalBienes = contarBienes(origen);
+    int intentos = 0;
+    while(intentos<totalBienes){
+        int idxBien = (rand() % totalBienes) + 1;
+        struct bien* elegido = origen->bienes;
+        for(int i=1; i<idxBien && elegido!=NULL; i++){
+            elegido = elegido->siguiente;
         }
-        if (accion == 1){
-
-            struct comuna* origen = temp;
-            int vecino = rand() % (1 - 0 + 1) + 1;
-            struct comuna* destino;
-            if (vecino == 1){
-                destino = origen->siguiente;
-            }else{
-                destino = origen->anterior;
-           
-
-            while (true){
-            
-            struct bien* bienActual = origen->bienes;
-
-            if (contarBienes(origen) == 0){
-                break;
-            }
-            
-            //Selecciona bien
-            int idxBien = rand() % (contarBienes(origen) - 1 + 1) + 1;
-            
-            if(idxBien<1 || idxBien>contarBienes(origen)){
-                //validacion por si sale un n umero invalido
-                continue;
-            }
-            char* nombreBien = NULL;
-            struct bien* actual = origen->bienes;
-            for(int i=1; i<idxBien && actual!=NULL; i++){
-                actual = actual->siguiente;
-            }
-            if(actual!=NULL){
-                nombreBien = actual->nombre;
-            }
-            if (actual == NULL || actual->actualCantidad <= 0){
-                continue;
-            }
-            
-            int cantidad = rand() % (actual->actualCantidad - 1 + 1) +1;
-            
-            int exito = realizarTransferencia(origen, destino, nombreBien, cantidad);
+        if(elegido!=NULL && elegido->actualCantidad>0){
+            int cantidad = (rand() % elegido->actualCantidad) + 1;
+            int exito = realizarTransferencia(origen, destino, elegido->nombre, cantidad);
             if(exito==1){
                 aumentarValores(origen, cantidad);
                 aumentarValores(destino, cantidad);
-                break;
-            }    
-        }else{
-            continue;
-            } 
-    temp = temp -> siguiente;
+                return 1;
+            }
+            return 0;
+        }
+        intentos = intentos + 1;
     }
-
-
-    
+    return 0;
 }
 
-
-
+/**
+ * turnoComunas: Maneja el turno de las comunas que no administra el jugador.
+ * Cada comuna autonoma elige una accion al azar del 0 al 4.
+ * La accion 1 regala un bien a una comuna vecina.
+ * Las acciones 0, 2, 3 y 4 dejan la comuna tranquila ese dia.
+ * Las comunas del jugador no actuan aqui: esas las mueve el jugador.
+ * Recorre la lista completa una sola vez, siempre avanzando a la siguiente.
+ * Si alguna comuna llego a regalar se recalculan los indices de la sociedad.
+ */
+void turnoComunas(struct comuna* lista){
+    if(lista==NULL){
+        return;
+    }
+    int accionMinima = 0;
+    int accionMaxima = 4;
+    int total = contarComunas(lista);
+    int procesadas = 0;
+    int huboRegalo = 0;
+    struct comuna* temp = lista;
+    while(procesadas<total){
+        int accion = (rand() % (accionMaxima - accionMinima + 1)) + accionMinima;
+        if(temp->administrada==0 && accion==1){
+            int regalo = regalarAlAzar(temp);
+            if(regalo==1){
+                huboRegalo = 1;
+            }
+        }
+        temp = temp->siguiente;
+        procesadas = procesadas + 1;
+    }
+    if(huboRegalo==1){
+        recalcularIndices(lista);
+    }
+}
 
 /**
  * turnoDia: Maneja el turno del dia (jugador realiza transferencias).
