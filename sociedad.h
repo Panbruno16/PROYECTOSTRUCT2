@@ -17,6 +17,21 @@ struct juego{
 
 extern struct juego estado;
 
+/**
+ * nodoAVL: Nodo del arbol AVL del catalogo de libros.
+ * Guarda el nombre del archivo, la altura del subarbol que cuelga de el
+ * y los dos hijos. Se usa para buscar libros por nombre exacto.
+ */
+struct nodoAVL{
+    char nombre[50];
+    int altura;
+    struct nodoAVL* izquierda;
+    struct nodoAVL* derecha;
+};
+
+// Arbol AVL con los nombres de todos los libros del corpus
+extern struct nodoAVL* catalogoLibros;
+
 //Moldes
 
 /**
@@ -355,6 +370,90 @@ void mostrarResumen(struct comuna* lista);
  * mostrarMenu: Muestra el menu de opciones del jugador.
  */
 void mostrarMenu();
+
+/**
+ * alturaAVL: Devuelve la altura de un nodo del arbol AVL.
+ * Un nodo vacio tiene altura 0.
+ */
+int alturaAVL(struct nodoAVL* nodo);
+
+/**
+ * maximoEntero: Devuelve el mayor de dos numeros enteros.
+ */
+int maximoEntero(int primero, int segundo);
+
+/**
+ * factorBalance: Devuelve la diferencia entre la altura del hijo izquierdo
+ * y la del hijo derecho. Si es menor que -1 o mayor que 1 el subarbol
+ * esta desbalanceado y hay que rotarlo.
+ */
+int factorBalance(struct nodoAVL* nodo);
+
+/**
+ * rotarDerecha: Rota hacia la derecha un subarbol que quedo mas alto por la
+ * izquierda. Es la rotacion simple del AVL.
+ * Retorna la nueva raiz del subarbol.
+ */
+struct nodoAVL* rotarDerecha(struct nodoAVL* nodo);
+
+/**
+ * rotarIzquierda: Rota hacia la izquierda un subarbol que quedo mas alto por
+ * la derecha. Es la otra rotacion simple del AVL.
+ * Retorna la nueva raiz del subarbol.
+ */
+struct nodoAVL* rotarIzquierda(struct nodoAVL* nodo);
+
+/**
+ * insertarAVL: Inserta el nombre de un libro en el arbol AVL y lo deja
+ * balanceado con las rotaciones que hagan falta.
+ * Si el nombre ya estaba en el arbol no lo vuelve a insertar.
+ * Retorna la nueva raiz del arbol.
+ */
+struct nodoAVL* insertarAVL(struct nodoAVL* raiz, char* nombre);
+
+/**
+ * buscarAVL: Busca un libro en el arbol AVL por coincidencia EXACTA del
+ * nombre del archivo. Retorna el nodo si lo encuentra y NULL si no.
+ */
+struct nodoAVL* buscarAVL(struct nodoAVL* raiz, char* nombre);
+
+/**
+ * liberarAVL: Libera todos los nodos de un arbol AVL.
+ */
+void liberarAVL(struct nodoAVL* raiz);
+
+/**
+ * cargarCatalogoLibros: Recorre la carpeta del juego y mete en el arbol AVL
+ * todos los archivos .txt del corpus, menos el record.txt.
+ * Se llama al arrancar el programa, para tener el catalogo en memoria.
+ * Retorna la cantidad de libros cargados.
+ */
+int cargarCatalogoLibros();
+
+/**
+ * liberarCatalogoLibros: Libera el arbol AVL del catalogo de libros.
+ * Se llama al terminar el juego.
+ */
+void liberarCatalogoLibros();
+
+/**
+ * mostrarMenuBiblioteca: Muestra el menu de la biblioteca comunitaria.
+ */
+void mostrarMenuBiblioteca();
+
+/**
+ * buscarLibroPorNombre: Pide el nombre de un libro al jugador y lo busca
+ * en el arbol AVL por coincidencia exacta.
+ */
+void buscarLibroPorNombre();
+
+/**
+ * irALaBiblioteca: Maneja la visita del jugador a la biblioteca de una comuna.
+ * Elige la comuna (solo puede usar las suyas) y una persona de esa comuna
+ * y despues muestra el menu de la biblioteca.
+ * Retorna 1 si la entrada sigue viva y 0 si se acabo la entrada (EOF).
+ */
+int irALaBiblioteca(struct comuna* lista);
 
 /**
  * turnoComunas: Maneja el turno de las comunas que no administra el jugador.

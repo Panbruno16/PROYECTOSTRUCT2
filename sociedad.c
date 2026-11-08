@@ -8,9 +8,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dirent.h>
 
 // estructura global del juego
 struct juego estado;
+
+// Arbol AVL con los nombres de todos los libros del corpus
+struct nodoAVL* catalogoLibros = NULL;
 
 /**
  * crearComuna: Crea una nueva comuna con el nombre especificado.
@@ -1058,9 +1062,308 @@ void mostrarMenu(){
     printf("#  [2] Realizar transferencia\n");
     printf("#  [3] Ver detalle de comuna\n");
     printf("#  [4] Finalizar dia\n");
+    printf("#  [5] Ir a la biblioteca\n");
     printf("########################################\n");
     printf("\n");
     printf("Selecciona una opcion: ");
+}
+
+/**
+ * alturaAVL: Devuelve la altura de un nodo del arbol AVL.
+ * Un nodo vacio tiene altura 0.
+ */
+int alturaAVL(struct nodoAVL* nodo){
+    if(nodo==NULL){
+        return 0;
+    }
+    return nodo->altura;
+}
+
+/**
+ * maximoEntero: Devuelve el mayor de dos numeros enteros.
+ */
+int maximoEntero(int primero, int segundo){
+    if(primero>segundo){
+        return primero;
+    }
+    return segundo;
+}
+
+/**
+ * factorBalance: Devuelve la diferencia entre la altura del hijo izquierdo
+ * y la del hijo derecho. Si es menor que -1 o mayor que 1 el subarbol
+ * esta desbalanceado y hay que rotarlo.
+ */
+int factorBalance(struct nodoAVL* nodo){
+    if(nodo==NULL){
+        return 0;
+    }
+    return alturaAVL(nodo->izquierda) - alturaAVL(nodo->derecha);
+}
+
+/**
+ * rotarDerecha: Rota hacia la derecha un subarbol que quedo mas alto por la
+ * izquierda. El hijo izquierdo sube a ser la raiz y el nodo actual baja a
+ * ser su hijo derecho.
+ * Retorna la nueva raiz del subarbol.
+ */
+struct nodoAVL* rotarDerecha(struct nodoAVL* nodo){
+    struct nodoAVL* centro = nodo->izquierda;
+    struct nodoAVL* temporal = centro->derecha;
+    centro->derecha = nodo;
+    nodo->izquierda = temporal;
+    nodo->altura = 1 + maximoEntero(alturaAVL(nodo->izquierda), alturaAVL(nodo->derecha));
+    centro->altura = 1 + maximoEntero(alturaAVL(centro->izquierda), alturaAVL(centro->derecha));
+    return centro;
+}
+
+/**
+ * rotarIzquierda: Rota hacia la izquierda un subarbol que quedo mas alto por
+ * la derecha. El hijo derecho sube a ser la raiz y el nodo actual baja a
+ * ser su hijo izquierdo.
+ * Retorna la nueva raiz del subarbol.
+ */
+struct nodoAVL* rotarIzquierda(struct nodoAVL* nodo){
+    struct nodoAVL* centro = nodo->derecha;
+    struct nodoAVL* temporal = centro->izquierda;
+    centro->izquierda = nodo;
+    nodo->derecha = temporal;
+    nodo->altura = 1 + maximoEntero(alturaAVL(nodo->izquierda), alturaAVL(nodo->derecha));
+    centro->altura = 1 + maximoEntero(alturaAVL(centro->izquierda), alturaAVL(centro->derecha));
+    return centro;
+}
+
+/**
+ * insertarAVL: Inserta el nombre de un libro en el arbol AVL y lo deja
+ * balanceado con las rotaciones que hagan falta.
+ * Si el nombre ya estaba en el arbol no lo vuelve a insertar.
+ * Retorna la nueva raiz del arbol.
+ */
+struct nodoAVL* insertarAVL(struct nodoAVL* raiz, char* nombre){
+    if(raiz==NULL){
+        struct nodoAVL* nuevo = calloc(1, sizeof(struct nodoAVL));
+        strcpy(nuevo->nombre, nombre);
+        nuevo->altura = 1;
+        nuevo->izquierda = NULL;
+        nuevo->derecha = NULL;
+        return nuevo;
+    }
+
+    int comparacion = strcmp(nombre, raiz->nombre);
+    if(comparacion<0){
+        raiz->izquierda = insertarAVL(raiz->izquierda, nombre);
+    }
+    else if(comparacion>0){
+        raiz->derecha = insertarAVL(raiz->derecha, nombre);
+    }
+    else{
+        return raiz;
+    }
+
+    raiz->altura = 1 + maximoEntero(alturaAVL(raiz->izquierda), alturaAVL(raiz->derecha));
+    int balance = factorBalance(raiz);
+
+    if(balance>1 && strcmp(nombre, raiz->izquierda->nombre)<0){
+        return rotarDerecha(raiz);
+    }
+    if(balance<-1 && strcmp(nombre, raiz->derecha->nombre)>0){
+        return rotarIzquierda(raiz);
+    }
+    if(balance>1 && strcmp(nombre, raiz->izquierda->nombre)>0){
+        raiz->izquierda = rotarIzquierda(raiz->izquierda);
+        return rotarDerecha(raiz);
+    }
+    if(balance<-1 && strcmp(nombre, raiz->derecha->nombre)<0){
+        raiz->derecha = rotarDerecha(raiz->derecha);
+        return rotarIzquierda(raiz);
+    }
+    return raiz;
+}
+
+/**
+ * buscarAVL: Busca un libro en el arbol AVL por coincidencia EXACTA del
+ * nombre del archivo. Retorna el nodo si lo encuentra y NULL si no.
+ */
+struct nodoAVL* buscarAVL(struct nodoAVL* raiz, char* nombre){
+    if(raiz==NULL){
+        return NULL;
+    }
+    int comparacion = strcmp(nombre, raiz->nombre);
+    if(comparacion==0){
+        return raiz;
+    }
+    if(comparacion<0){
+        return buscarAVL(raiz->izquierda, nombre);
+    }
+    return buscarAVL(raiz->derecha, nombre);
+}
+
+/**
+ * liberarAVL: Libera todos los nodos de un arbol AVL.
+ * Va primero por los hijos y al final libera el nodo actual.
+ */
+void liberarAVL(struct nodoAVL* raiz){
+    if(raiz==NULL){
+        return;
+    }
+    liberarAVL(raiz->izquierda);
+    liberarAVL(raiz->derecha);
+    free(raiz);
+}
+
+/**
+ * cargarCatalogoLibros: Recorre la carpeta del juego y mete en el arbol AVL
+ * todos los archivos .txt del corpus, menos el record.txt que es de uso
+ * interno del programa. Se llama al arrancar el programa.
+ * Retorna la cantidad de libros cargados.
+ */
+int cargarCatalogoLibros(){
+    if(catalogoLibros!=NULL){
+        liberarAVL(catalogoLibros);
+        catalogoLibros = NULL;
+    }
+    DIR* carpeta = opendir(".");
+    if(carpeta==NULL){
+        printf("Error: no se pudo abrir la carpeta del juego\n");
+        return 0;
+    }
+    struct dirent* entrada;
+    int cargados = 0;
+    while((entrada = readdir(carpeta))!=NULL){
+        char* nombre = entrada->d_name;
+        int largo = strlen(nombre);
+        if(largo>4 && strcmp(nombre+largo-4, ".txt")==0 && strcmp(nombre, "record.txt")!=0){
+            catalogoLibros = insertarAVL(catalogoLibros, nombre);
+            cargados = cargados + 1;
+        }
+    }
+    closedir(carpeta);
+    return cargados;
+}
+
+/**
+ * liberarCatalogoLibros: Libera el arbol AVL del catalogo de libros.
+ * Se llama al terminar el juego.
+ */
+void liberarCatalogoLibros(){
+    liberarAVL(catalogoLibros);
+    catalogoLibros = NULL;
+}
+
+/**
+ * mostrarMenuBiblioteca: Muestra el menu de la biblioteca comunitaria.
+ */
+void mostrarMenuBiblioteca(){
+    printf("\n");
+    printf("########################################\n");
+    printf("#  BIBLIOTECA COMUNITARIA\n");
+    printf("########################################\n");
+    printf("#  [1] Buscar libro por nombre\n");
+    printf("#  [2] Volver al menu\n");
+    printf("########################################\n");
+    printf("\n");
+    printf("Selecciona una opcion: ");
+}
+
+/**
+ * buscarLibroPorNombre: Pide el nombre de un libro al jugador y lo busca
+ * en el arbol AVL por coincidencia exacta.
+ * Si no existe ningun libro con ese nombre lo dice claramente.
+ */
+void buscarLibroPorNombre(){
+    printf("Nombre del libro (ejemplo: moby_dick.txt): ");
+    char nombre[50];
+    if(scanf("%49s", nombre)!=1){
+        if(limpiarEntrada()==0){
+            printf("\nSe acabo la entrada.\n");
+            return;
+        }
+        printf("Entrada invalida, escribe el nombre del libro.\n");
+        return;
+    }
+    struct nodoAVL* encontrado = buscarAVL(catalogoLibros, nombre);
+    if(encontrado!=NULL){
+        printf("Libro encontrado en el catalogo: %s\n", encontrado->nombre);
+    }
+    else{
+        printf("No existe ningun libro con el nombre %s\n", nombre);
+    }
+}
+
+/**
+ * irALaBiblioteca: Maneja la visita del jugador a la biblioteca de una comuna.
+ * Elige la comuna (solo puede usar las suyas) y una persona de esa comuna
+ * y despues muestra el menu de la biblioteca.
+ * Retorna 1 si la entrada sigue viva y 0 si se acabo la entrada (EOF).
+ */
+int irALaBiblioteca(struct comuna* lista){
+    if(lista==NULL){
+        return 1;
+    }
+    printf("\nSelecciona comuna (solo tus comunas): ");
+    int idxComuna;
+    if(scanf("%d", &idxComuna)!=1){
+        if(limpiarEntrada()==0){
+            return 0;
+        }
+        printf("Entrada invalida, escribe un numero.\n");
+        return 1;
+    }
+    if(idxComuna<1 || idxComuna>contarComunas(lista)){
+        printf("Indice invalido.\n");
+        return 1;
+    }
+    struct comuna* biblioteca = lista;
+    for(int i=1; i<idxComuna; i++){
+        biblioteca = biblioteca->siguiente;
+    }
+    if(biblioteca->administrada==0){
+        printf("Solo puedes usar la biblioteca de tus comunas.\n");
+        return 1;
+    }
+
+    mostrarPersonas(biblioteca);
+    printf("Selecciona persona: ");
+    int idxPersona;
+    if(scanf("%d", &idxPersona)!=1){
+        if(limpiarEntrada()==0){
+            return 0;
+        }
+        printf("Entrada invalida, escribe un numero.\n");
+        return 1;
+    }
+    if(idxPersona<1 || idxPersona>contarPersonas(biblioteca)){
+        printf("Indice invalido.\n");
+        return 1;
+    }
+    struct persona* lectora = biblioteca->habitantes;
+    for(int i=1; i<idxPersona; i++){
+        lectora = lectora->siguiente;
+    }
+    printf("\n%s entra a la biblioteca de %s\n", lectora->nombre, biblioteca->nombre);
+
+    int seguir = 1;
+    while(seguir==1){
+        mostrarMenuBiblioteca();
+        int opcion;
+        if(scanf("%d", &opcion)!=1){
+            if(limpiarEntrada()==0){
+                return 0;
+            }
+            printf("Entrada invalida, escribe un numero.\n");
+            continue;
+        }
+        if(opcion==1){
+            buscarLibroPorNombre();
+        }
+        else if(opcion==2){
+            seguir = 0;
+        }
+        else{
+            printf("Opcion invalida.\n");
+        }
+    }
+    return 1;
 }
 
 /**
@@ -1305,6 +1608,12 @@ int turnoDia(struct comuna* lista){
         }
         else if(opcion==4){
             return 1;
+        }
+        else if(opcion==5){
+            if(irALaBiblioteca(lista)==0){
+                printf("\nSe acabo la entrada, se termina el dia.\n");
+                return 0;
+            }
         }
         else{
             printf("Opcion invalida.\n");

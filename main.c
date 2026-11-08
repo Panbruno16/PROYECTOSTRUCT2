@@ -83,6 +83,9 @@ int main(){
     printf(GREEN "Comunas creadas: %d\n" RESET, contarComunas(cabeza));
     printf(GREEN "Tus comunas: %d\n" RESET, contarAdministradas(cabeza));
 
+    int librosCargados = cargarCatalogoLibros();
+    printf(GREEN "Libros en el catalogo: %d\n" RESET, librosCargados);
+
     int jugando = 1;
     recalcularIndices(cabeza);
     while(jugando){
@@ -127,6 +130,7 @@ int main(){
 
     guardarRecord();
     liberarListaComunas(cabeza);
+    liberarCatalogoLibros();
 
     return 0;
 }
