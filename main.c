@@ -30,8 +30,12 @@ int main(){
     printf(CYAN "\nConfiguracion inicial:\n" RESET);
 
     printf("Cantidad de comunas (3-50): ");
-    int numComunas;
-    scanf("%d", &numComunas);
+    int numComunas = 3;
+    if(scanf("%d", &numComunas)!=1){
+        limpiarEntrada();
+        numComunas = 3;
+        printf("Entrada invalida, se usaran 3 comunas.\n");
+    }
     if(numComunas < 3){
         numComunas = 3;
     }
@@ -40,8 +44,12 @@ int main(){
     }
 
     printf("Cantidad de oficios en el catalogo (1-20): ");
-    int numServicios;
-    scanf("%d", &numServicios);
+    int numServicios = 1;
+    if(scanf("%d", &numServicios)!=1){
+        limpiarEntrada();
+        numServicios = 1;
+        printf("Entrada invalida, se usara 1 oficio.\n");
+    }
     if(numServicios < 1){
         numServicios = 1;
     }
@@ -50,8 +58,12 @@ int main(){
     }
 
     printf("Cantidad de bienes (1-20): ");
-    int numBienes;
-    scanf("%d", &numBienes);
+    int numBienes = 1;
+    if(scanf("%d", &numBienes)!=1){
+        limpiarEntrada();
+        numBienes = 1;
+        printf("Entrada invalida, se usara 1 bien.\n");
+    }
     if(numBienes < 1){
         numBienes = 1;
     }
@@ -77,14 +89,19 @@ int main(){
         estado.dia_actual = estado.dia_actual + 1;
         printf(CYAN BOLD "\nDIA %d\n" RESET, estado.dia_actual);
 
-        turnoDia(cabeza);
+        int diaTerminado = turnoDia(cabeza);
         turnoComunas(cabeza);
 
         turnoNoche(&cabeza);
 
-        if(cabeza==NULL || contarAdministradas(cabeza)==0){
+        if(diaTerminado==0){
+            printf(YELLOW "\nSe acabo la entrada, el juego termina aqui.\n" RESET);
+            jugando = 0;
+        }
+
+        else if(cabeza==NULL || contarComunas(cabeza) < 3 || contarAdministradas(cabeza)==0){
             printf(RED BOLD "\nGAME OVER\n" RESET);
-            printf(YELLOW "Perdiste tus 3 comunas, no hay reposicion.\n" RESET);
+            printf(YELLOW "La sociedad quedo por debajo de 3 comunas, fracasaste.\n" RESET);
             printf(YELLOW "Has sobrevivido %d dias.\n" RESET, estado.dia_actual);
             jugando = 0;
         }
@@ -93,8 +110,11 @@ int main(){
             printf(MAGENTA "\nFelicidades! Has sobrevivido %d dias.\n" RESET, estado.dia_actual);
             printf(YELLOW "Deseas retirarte y cambiar al capitalismo?\n" RESET);
             printf("[1] Si, retirarme [2] No, seguir en la comuna: ");
-            int opcion;
-            scanf("%d", &opcion);
+            int opcion = 2;
+            if(scanf("%d", &opcion)!=1){
+                limpiarEntrada();
+                opcion = 2;
+            }
             if(opcion == 1){
                 printf(GREEN BOLD "\nFIN DEL JUEGO\n" RESET);
                 printf(CYAN "Donald Trump estara orgulloso de que se una a nosotros :)))))\n" RESET);

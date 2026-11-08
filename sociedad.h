@@ -52,6 +52,10 @@ struct persona {
  * Estructura que representa una comuna en la sociedad.
  * Tiene sus bienes, sus habitantes y los indices de la sociedad.
  * El indice de reciprocidad mide el balance entre regalos dados y recibidos.
+ * La necesidad local es la que sale solo de sus bienes, sin mirar a las vecinas.
+ * La necesidad final es la que se compara contra el limite de disolucion.
+ * Los campos regalosDados y regalosRecibidos acumulan lo que ha regalado
+ * y lo que ha recibido de sus comunas vecinas.
  * El campo administrada marca las 3 comunas que maneja el jugador.
  * Si administrada es 1 la comuna es del jugador, si es 0 es autonoma.
  */
@@ -60,9 +64,12 @@ struct comuna {
     struct bien* bienes;
     struct persona* habitantes;
     float necesidad;
+    float necesidadLocal;
     float satisfaccion;
     float pobreza;
     float reciprocidad;
+    int regalosDados;
+    int regalosRecibidos;
     int administrada;
     struct comuna* siguiente;
     struct comuna* anterior;
@@ -192,22 +199,51 @@ int contarAdministradas(struct comuna* lista);
 void inicializarSociedad(struct comuna* lista);
 
 /**
- * calcularNecesidad: Calcula el indice de necesidad de una comuna.
+ * calcularNecesidadLocal: Calcula la necesidad que sale solo de los bienes.
  * Recorre los bienes y calcula el promedio de (actual/maxima) de llenado.
- * La necesidad es 100 menos ese llenado: alto = le falta recursos,
- * bajo = tiene recursos. Asi la comuna se disuelve cuando la necesidad es muy alta.
+ * La necesidad local es 100 menos ese llenado: alto = le falta recursos,
+ * bajo = tiene recursos. Esta es la parte local del indice de necesidad.
+ */
+float calcularNecesidadLocal(struct comuna* comuna);
+
+/**
+ * calcularReciprocidad: Calcula el balance entre regalos recibidos y dados.
+ * Se calcula como: (recibidos - dados) / (recibidos + dados) * 100.
+ * El resultado va de -100 (solo regala) a 100 (solo recibe).
+ * Si no ha habido ningun regalo el indice queda en 0 (neutral).
+ */
+float calcularReciprocidad(struct comuna* comuna);
+
+/**
+ * calcularNecesidad: Calcula el indice final de necesidad de una comuna.
+ * Junta 5 elementos, cada uno con su peso:
+ *   40% necesidad local (sus bienes)
+ *   15% necesidad de las comunas circundantes
+ *   15% 100 menos la satisfaccion de las comunas circundantes
+ *   15% 100 menos el apoyo recibido en regalos
+ *   15% presion por el indice de reciprocidad
+ * Las vecinas que estan mal no pueden ayudar y suben la necesidad.
+ * Recibir regalos cubre carencias y baja la necesidad.
+ * Regalar sin recibir deja la comuna mas necesitada.
+ * Retorna un valor entre 0 y 100.
  */
 float calcularNecesidad(struct comuna* comuna);
 
 /**
  * calcularSatisfaccion: Calcula el indice de satisfaccion de una comuna.
- * Considera el llenado de bienes y el porcentaje de personas con oficio.
+ * Se calcula aparte de la necesidad, solo con lo local:
+ * el llenado de bienes (100 - necesidad local) y el porcentaje de personas con oficio.
  * Mas recursos y mas gente con oficio = mas satisfecha.
+ * No depende de las comunas vecinas.
  */
 float calcularSatisfaccion(struct comuna* comuna);
 
 /**
  * recalcularIndices: Recalcula los indices de todas las comunas.
+ * Primero la necesidad local y la reciprocidad de cada comuna.
+ * Luego la satisfaccion de cada comuna con su necesidad local.
+ * Al final la necesidad final usando tambien a las comunas vecinas.
+ * Se hacen en ese orden para no usar valores a medias.
  */
 void recalcularIndices(struct comuna* lista);
 
@@ -238,6 +274,7 @@ void verificarEmergencias(struct comuna* lista);
 /**
  * realizarTransferencia: Transfiere un bien de una comuna a otra vecina.
  * Verifica que sean vecinas, que haya suficiente cantidad y descuenta del origen.
+ * El origen acumula regalos dados y el destino regalos recibidos.
  * Retorna 1 si fue exitosa, 0 si fallo.
  */
 int realizarTransferencia(struct comuna* origen, struct comuna* destino, char* bien, int cantidad);
@@ -247,7 +284,7 @@ int realizarTransferencia(struct comuna* origen, struct comuna* destino, char* b
  * Parte de sus personas migra a comunas vecinas con sus oficios.
  * La minoria se queda sin hogar y sube la pobreza global.
  * Los bienes de la comuna se pierden. La quita de la lista circular.
- * Si la comuna era del jugador se pierde sin reposicion.
+ * Si la comuna era del jugador se le asigna otra comuna autonoma en su lugar.
  */
 void disolverComuna(struct comuna** lista, struct comuna* comuna);
 
@@ -301,9 +338,20 @@ void mostrarMenu();
 void turnoComunas(struct comuna* lista);
 
 /**
- * turnoDia: Maneja el turno del dia (jugador realiza transferencias).
+ * limpiarEntrada: Deja el teclado listo para la siguiente lectura.
+ * Se llama cuando scanf no logra leer un numero: descarta todo lo que
+ * quede en el buffer hasta el salto de linea.
+ * Retorna 1 si quedo algo por leer, 0 si se acabo la entrada (EOF).
  */
-void turnoDia(struct comuna* lista);
+int limpiarEntrada();
+
+/**
+ * turnoDia: Maneja el turno del dia (jugador realiza transferencias).
+ * Valida cada lectura del teclado para no quedarse en un bucle infinito
+ * si se escribe algo que no es un numero.
+ * Retorna 1 si el dia sigue normal y 0 si se acabo la entrada.
+ */
+int turnoDia(struct comuna* lista);
 
 /**
  * turnoNoche: Maneja el turno de la noche (consumo, emergencias, disoluciones).

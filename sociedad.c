@@ -15,15 +15,18 @@ struct juego estado;
 /**
  * crearComuna: Crea una nueva comuna con el nombre especificado.
  * Inicializa los indices en 0 y los punteros de la lista circular apuntan a si mismo.
- * Nace como comuna autonoma (administrada en 0).
+ * Nace sin regalos dados ni recibidos y como comuna autonoma (administrada en 0).
  */
 struct comuna* crearComuna(char* nombre){
     struct comuna* nueva = calloc(1, sizeof(struct comuna));
     strcpy(nueva->nombre, nombre);
     nueva->necesidad = 0.0;
+    nueva->necesidadLocal = 0.0;
     nueva->satisfaccion = 0.0;
     nueva->pobreza = 0.0;
     nueva->reciprocidad = 0.0;
+    nueva->regalosDados = 0;
+    nueva->regalosRecibidos = 0;
     nueva->administrada = 0;
     nueva->siguiente = nueva;
     nueva->anterior = nueva;
@@ -33,6 +36,7 @@ struct comuna* crearComuna(char* nombre){
 /**
  * mostrarComuna: Muestra en pantalla la informacion de una comuna.
  * Imprime el nombre y los indices de necesidad, satisfaccion, pobreza y reciprocidad.
+ * Tambien muestra la necesidad local y el balance de regalos dados y recibidos.
  */
 void mostrarComuna(struct comuna* comuna){
     if(comuna==NULL){
@@ -42,10 +46,13 @@ void mostrarComuna(struct comuna* comuna){
     printf("########################################\n");
     printf("#  COMUNA: %s\n", comuna->nombre);
     printf("########################################\n");
-    printf("#  Necesidad:    %.2f%%\n", comuna->necesidad);
-    printf("#  Satisfaccion: %.2f%%\n", comuna->satisfaccion);
-    printf("#  Pobreza:      %.2f%%\n", comuna->pobreza);
-    printf("#  Reciprocidad: %.2f\n", comuna->reciprocidad);
+    printf("#  Necesidad:         %.2f%%\n", comuna->necesidad);
+    printf("#  Necesidad local:   %.2f%%\n", comuna->necesidadLocal);
+    printf("#  Satisfaccion:      %.2f%%\n", comuna->satisfaccion);
+    printf("#  Pobreza:           %.2f%%\n", comuna->pobreza);
+    printf("#  Reciprocidad:      %.2f\n", comuna->reciprocidad);
+    printf("#  Regalos dados:     %d\n", comuna->regalosDados);
+    printf("#  Regalos recibidos: %d\n", comuna->regalosRecibidos);
     printf("########################################\n");
 }
 
@@ -369,6 +376,10 @@ struct comuna* crearComunas(char* nombreArchivo, int cantidad, int numServicios,
         total = total + 1;
     }
     fclose(archivo);
+    if(total==0){
+        printf("Error: el archivo %s no tiene ningun nombre de comuna\n", nombreArchivo);
+        return NULL;
+    }
     int seleccionadas[50];
     for(int i = 0; i < 50; i++){
         seleccionadas[i] = 0;
@@ -382,6 +393,10 @@ struct comuna* crearComunas(char* nombreArchivo, int cantidad, int numServicios,
             agregarComuna(&lista, nombres[indice]);
             creadas = creadas + 1;
         }
+    }
+    if(lista==NULL){
+        printf("Error: no se pudo crear ninguna comuna\n");
+        return NULL;
     }
     FILE* archivoBienes = fopen("bienes", "r");
     if(archivoBienes != NULL){
@@ -494,7 +509,7 @@ int contarComunas(struct comuna* lista){
 /**
  * contarAdministradas: Cuenta las comunas que maneja el jugador.
  * Recorre la lista circular y cuenta las que tienen administrada en 1.
- * El jugador empieza con 3 y no tiene reposicion.
+ * El jugador empieza con 3 y siempre se le reasigna otra cuando pierde una.
  */
 int contarAdministradas(struct comuna* lista){
     if(lista==NULL){
@@ -532,12 +547,12 @@ void inicializarSociedad(struct comuna* lista){
 }
 
 /**
- * calcularNecesidad: Calcula el indice de necesidad de una comuna.
+ * calcularNecesidadLocal: Calcula la necesidad que sale solo de los bienes.
  * Recorre los bienes y calcula el promedio de (actual/maxima) de llenado.
- * La necesidad es 100 menos ese llenado: alto = le falta recursos,
- * bajo = tiene recursos. Asi se disuelve cuando la necesidad es muy alta.
+ * La necesidad local es 100 menos ese llenado: alto = le falta recursos,
+ * bajo = tiene recursos. Esta es la parte local del indice de necesidad.
  */
-float calcularNecesidad(struct comuna* comuna){
+float calcularNecesidadLocal(struct comuna* comuna){
     if(comuna==NULL){
         return 0.0;
     }
@@ -560,9 +575,94 @@ float calcularNecesidad(struct comuna* comuna){
 }
 
 /**
+ * calcularReciprocidad: Calcula el balance entre regalos recibidos y dados.
+ * Se calcula como: (recibidos - dados) / (recibidos + dados) * 100.
+ * El resultado va de -100 (solo regala) a 100 (solo recibe).
+ * Si no ha habido ningun regalo el indice queda en 0 (neutral).
+ */
+float calcularReciprocidad(struct comuna* comuna){
+    if(comuna==NULL){
+        return 0.0;
+    }
+    int dados = comuna->regalosDados;
+    int recibidos = comuna->regalosRecibidos;
+    int total = dados + recibidos;
+    if(total==0){
+        return 0.0;
+    }
+    float balance = ((float)(recibidos - dados) / (float)total) * 100.0;
+    return balance;
+}
+
+/**
+ * calcularNecesidad: Calcula el indice final de necesidad de una comuna.
+ * Junta 5 elementos, cada uno con su peso:
+ *   40% necesidad local (sus bienes)
+ *   15% necesidad de las comunas circundantes
+ *   15% 100 menos la satisfaccion de las comunas circundantes
+ *   15% 100 menos el apoyo recibido en regalos
+ *   15% presion por el indice de reciprocidad
+ * Las vecinas que estan mal no pueden ayudar y suben la necesidad.
+ * Recibir regalos cubre carencias y baja la necesidad.
+ * Regalar sin recibir deja la comuna mas necesitada.
+ * Para no usar valores a medias se toma la necesidad local de las vecinas.
+ * Retorna un valor entre 0 y 100.
+ */
+float calcularNecesidad(struct comuna* comuna){
+    if(comuna==NULL){
+        return 0.0;
+    }
+
+    // 1. Necesidad local: solo sus bienes
+    float local = comuna->necesidadLocal;
+
+    // 2. Necesidades de las comunas circundantes
+    //    y 3. su satisfaccion. Si no hay vecinas se usan los valores propios.
+    float necesidadVecinas = local;
+    float satisfaccionVecinas = comuna->satisfaccion;
+    if(comuna->siguiente!=comuna){
+        if(comuna->siguiente==comuna->anterior){
+            // Solo hay dos comunas en toda la sociedad
+            necesidadVecinas = comuna->siguiente->necesidadLocal;
+            satisfaccionVecinas = comuna->siguiente->satisfaccion;
+        }
+        else{
+            necesidadVecinas = (comuna->siguiente->necesidadLocal + comuna->anterior->necesidadLocal) / 2.0;
+            satisfaccionVecinas = (comuna->siguiente->satisfaccion + comuna->anterior->satisfaccion) / 2.0;
+        }
+    }
+
+    // 4. Apoyo recibido en regalos: cuanto cubrio sus carencias
+    int totalRegalos = comuna->regalosDados + comuna->regalosRecibidos;
+    float apoyoRecibido = 50.0;
+    if(totalRegalos>0){
+        apoyoRecibido = ((float)comuna->regalosRecibidos / (float)totalRegalos) * 100.0;
+    }
+
+    // 5. Presion del balance de reciprocidad: -100 (solo regala) presiona 100
+    float presionReciprocidad = (100.0 - comuna->reciprocidad) / 2.0;
+
+    float necesidad = (local * 0.40)
+                    + (necesidadVecinas * 0.15)
+                    + ((100.0 - satisfaccionVecinas) * 0.15)
+                    + ((100.0 - apoyoRecibido) * 0.15)
+                    + (presionReciprocidad * 0.15);
+
+    if(necesidad>100.0){
+        necesidad = 100.0;
+    }
+    if(necesidad<0.0){
+        necesidad = 0.0;
+    }
+    return necesidad;
+}
+
+/**
  * calcularSatisfaccion: Calcula el indice de satisfaccion de una comuna.
- * Considera el llenado de bienes (100 - necesidad) y el porcentaje de personas con oficio.
+ * Se calcula aparte de la necesidad, solo con lo local:
+ * el llenado de bienes (100 - necesidad local) y el porcentaje de personas con oficio.
  * Mas recursos y mas gente con oficio = mas satisfecha.
+ * No depende de las comunas vecinas.
  */
 float calcularSatisfaccion(struct comuna* comuna){
     if(comuna==NULL){
@@ -584,7 +684,7 @@ float calcularSatisfaccion(struct comuna* comuna){
     else{
         ratioServicios = 0.0;
     }
-    float satisfaccion = ((100.0 - comuna->necesidad)*0.6)+(ratioServicios*40.0);
+    float satisfaccion = ((100.0 - comuna->necesidadLocal)*0.6)+(ratioServicios*40.0);
     if(satisfaccion>100.0){
         satisfaccion = 100.0;
     }
@@ -596,6 +696,10 @@ float calcularSatisfaccion(struct comuna* comuna){
 
 /**
  * recalcularIndices: Recalcula los indices de todas las comunas.
+ * Primero la necesidad local y la reciprocidad de cada comuna.
+ * Luego la satisfaccion de cada comuna con su necesidad local.
+ * Al final la necesidad final usando tambien a las comunas vecinas.
+ * Se hacen en ese orden para no usar valores a medias.
  */
 void recalcularIndices(struct comuna* lista){
     if(lista==NULL){
@@ -603,8 +707,20 @@ void recalcularIndices(struct comuna* lista){
     }
     struct comuna* actual = lista;
     do{
-        actual->necesidad = calcularNecesidad(actual);
+        actual->necesidadLocal = calcularNecesidadLocal(actual);
+        actual->reciprocidad = calcularReciprocidad(actual);
+        actual = actual->siguiente;
+    }while(actual!=lista);
+
+    actual = lista;
+    do{
         actual->satisfaccion = calcularSatisfaccion(actual);
+        actual = actual->siguiente;
+    }while(actual!=lista);
+
+    actual = lista;
+    do{
+        actual->necesidad = calcularNecesidad(actual);
         actual = actual->siguiente;
     }while(actual!=lista);
 }
@@ -960,11 +1076,31 @@ void turnoComunas(struct comuna* lista){
 }
 
 /**
- * turnoDia: Maneja el turno del dia (jugador realiza transferencias).
+ * limpiarEntrada: Deja el teclado listo para la siguiente lectura.
+ * Se llama cuando scanf no logra leer un numero: descarta todo lo que
+ * quede en el buffer hasta el salto de linea.
+ * Retorna 1 si quedo algo por leer, 0 si se acabo la entrada (EOF).
  */
-void turnoDia(struct comuna* lista){
+int limpiarEntrada(){
+    int caracter = getchar();
+    while(caracter!='\n' && caracter!=EOF){
+        caracter = getchar();
+    }
+    if(caracter==EOF){
+        return 0;
+    }
+    return 1;
+}
+
+/**
+ * turnoDia: Maneja el turno del dia (jugador realiza transferencias).
+ * Valida cada lectura del teclado para no quedarse en un bucle infinito
+ * si se escribe algo que no es un numero.
+ * Retorna 1 si el dia sigue normal y 0 si se acabo la entrada.
+ */
+int turnoDia(struct comuna* lista){
     if(lista==NULL){
-        return;
+        return 1;
     }
     int turnos = calcularTurnosPorDia(contarComunas(lista));
     printf("\nTienes %d turnos para realizar transferencias.\n", turnos);
@@ -972,17 +1108,38 @@ void turnoDia(struct comuna* lista){
         mostrarResumen(lista);
         mostrarMenu();
         int opcion;
-        scanf("%d", &opcion);
+        if(scanf("%d", &opcion)!=1){
+            if(limpiarEntrada()==0){
+                printf("\nSe acabo la entrada, se termina el dia.\n");
+                return 0;
+            }
+            printf("Entrada invalida, escribe un numero.\n");
+            continue;
+        }
         if(opcion==1){
             mostrarResumen(lista);
         }
         else if(opcion==2){
             printf("Selecciona comuna origen: ");
             int idxOrigen;
-            scanf("%d", &idxOrigen);
+            if(scanf("%d", &idxOrigen)!=1){
+                if(limpiarEntrada()==0){
+                    printf("\nSe acabo la entrada, se termina el dia.\n");
+                    return 0;
+                }
+                printf("Entrada invalida, escribe un numero.\n");
+                continue;
+            }
             printf("Selecciona comuna destino: ");
             int idxDestino;
-            scanf("%d", &idxDestino);
+            if(scanf("%d", &idxDestino)!=1){
+                if(limpiarEntrada()==0){
+                    printf("\nSe acabo la entrada, se termina el dia.\n");
+                    return 0;
+                }
+                printf("Entrada invalida, escribe un numero.\n");
+                continue;
+            }
             if(idxOrigen<1 || idxDestino<1 || idxOrigen>contarComunas(lista) || idxDestino>contarComunas(lista)){
                 printf("Indice invalido.\n");
                 continue;
@@ -1018,7 +1175,14 @@ void turnoDia(struct comuna* lista){
             }
             printf("\nSelecciona bien (numero): ");
             int idxBien;
-            scanf("%d", &idxBien);
+            if(scanf("%d", &idxBien)!=1){
+                if(limpiarEntrada()==0){
+                    printf("\nSe acabo la entrada, se termina el dia.\n");
+                    return 0;
+                }
+                printf("Entrada invalida, escribe un numero.\n");
+                continue;
+            }
             if(idxBien<1 || idxBien>contarBienes(origen)){
                 printf("Numero invalido.\n");
                 continue;
@@ -1033,18 +1197,35 @@ void turnoDia(struct comuna* lista){
             }
             printf("Cantidad: ");
             int cantidad;
-            scanf("%d", &cantidad);
+            if(scanf("%d", &cantidad)!=1){
+                if(limpiarEntrada()==0){
+                    printf("\nSe acabo la entrada, se termina el dia.\n");
+                    return 0;
+                }
+                printf("Entrada invalida, escribe un numero.\n");
+                continue;
+            }
             int exito = realizarTransferencia(origen, destino, nombreBien, cantidad);
             if(exito==1){
                 aumentarValores(origen, cantidad);
                 aumentarValores(destino, cantidad);
+                // Los indices cambian al instante: la reciprocidad y la necesidad
+                // dependen de los regalos y de las comunas vecinas
+                recalcularIndices(lista);
                 turnos = turnos - 1;
             }
         }
         else if(opcion==3){
             printf("Selecciona comuna: ");
             int idx;
-            scanf("%d", &idx);
+            if(scanf("%d", &idx)!=1){
+                if(limpiarEntrada()==0){
+                    printf("\nSe acabo la entrada, se termina el dia.\n");
+                    return 0;
+                }
+                printf("Entrada invalida, escribe un numero.\n");
+                continue;
+            }
             if(idx<1 || idx>contarComunas(lista)){
                 printf("Indice invalido.\n");
                 continue;
@@ -1058,22 +1239,26 @@ void turnoDia(struct comuna* lista){
             mostrarServicios(seleccionada);
         }
         else if(opcion==4){
-            return;
+            return 1;
         }
         else{
             printf("Opcion invalida.\n");
         }
     }
+    return 1;
 }
 
 /**
  * turnoNoche: Maneja el turno de la noche (consumo, emergencias, disoluciones).
+ * Libera al inicio el bloqueo de intercambios de la noche anterior, para que
+ * una emergencia solo detenga los intercambios del dia siguiente.
  */
 void turnoNoche(struct comuna** lista){
     printf("\n");
     printf("########################################\n");
     printf("#  NOCHE\n");
     printf("########################################\n");
+    estado.transferencias_bloqueadas = 0;
     aplicarConsumoNocturno(*lista);
     verificarEmergencias(*lista);
     // Recalculo antes de disolver para decidir con indices frescos del consumo
@@ -1090,6 +1275,9 @@ void turnoNoche(struct comuna** lista){
 /**
  * realizarTransferencia: Transfiere un bien de una comuna a otra vecina.
  * Verifica que sean vecinas, que haya suficiente cantidad y descuenta del origen.
+ * El origen queda con mas regalos dados y el destino con mas regalos recibidos,
+ * que es lo que alimenta el indice de reciprocidad.
+ * Retorna 1 si fue exitosa, 0 si fallo.
  */
 int realizarTransferencia(struct comuna* origen, struct comuna* destino, char* bien, int cantidad){
     if(origen==NULL || destino==NULL || bien==NULL || cantidad<=0){
@@ -1112,6 +1300,8 @@ int realizarTransferencia(struct comuna* origen, struct comuna* destino, char* b
                 return 0;
             }
             actual->actualCantidad = actual->actualCantidad - cantidad;
+            origen->regalosDados = origen->regalosDados + cantidad;
+            destino->regalosRecibidos = destino->regalosRecibidos + cantidad;
             printf("Transferencia exitosa, todos ganan: %d de %s de %s a %s\n", cantidad, bien, origen->nombre, destino->nombre);
             return 1;
         }
@@ -1126,7 +1316,7 @@ int realizarTransferencia(struct comuna* origen, struct comuna* destino, char* b
  * Parte de sus personas migra a comunas vecinas con sus oficios.
  * La minoria se queda sin hogar y sube la pobreza global.
  * Los bienes de la comuna se pierden. La quita de la lista circular.
- * Si la comuna era del jugador se pierde sin reposicion.
+ * Si la comuna era del jugador se le asigna otra comuna autonoma en su lugar.
  */
 void disolverComuna(struct comuna** lista, struct comuna* comuna){
     if(lista==NULL || comuna==NULL){
@@ -1144,6 +1334,33 @@ void disolverComuna(struct comuna** lista, struct comuna* comuna){
     int hayVecina = 1;
     if(vecinaDerecha==comuna){
         hayVecina = 0;
+    }
+
+    // Si era comuna del jugador se le asigna otra en su lugar.
+    // Primero se miran las vecinas autonomas y despues toda la lista.
+    int eraTuya = comuna->administrada;
+    struct comuna* reemplazo = NULL;
+    if(eraTuya==1){
+        if(vecinaIzquierda!=comuna && vecinaIzquierda->administrada==0){
+            reemplazo = vecinaIzquierda;
+        }
+        else if(vecinaDerecha!=comuna && vecinaDerecha->administrada==0){
+            reemplazo = vecinaDerecha;
+        }
+        else{
+            struct comuna* busqueda = *lista;
+            if(busqueda!=NULL){
+                do{
+                    if(busqueda!=comuna && busqueda->administrada==0 && reemplazo==NULL){
+                        reemplazo = busqueda;
+                    }
+                    busqueda = busqueda->siguiente;
+                }while(busqueda!=*lista);
+            }
+        }
+        if(reemplazo!=NULL){
+            reemplazo->administrada = 1;
+        }
     }
 
     // Migrar la mayoria a las comunas vecinas, una persona a una
@@ -1174,10 +1391,15 @@ void disolverComuna(struct comuna** lista, struct comuna* comuna){
     if(hayVecina==0){
         printf("#  Era la ultima comuna, no hay donde migrar\n");
     }
-    if(comuna->administrada==1){
+    if(eraTuya==1){
         int restantes = contarAdministradas(*lista) - 1;
         printf("#  Era una comuna de tu gestion\n");
-        printf("#  No hay reposicion, perdiste una de tus 3\n");
+        if(reemplazo!=NULL){
+            printf("#  Se te asigna la comuna %s\n", reemplazo->nombre);
+        }
+        else{
+            printf("#  No hay comuna disponible para reemplazarla\n");
+        }
         if(restantes==1){
             printf("#  Te queda 1 comuna\n");
         }
@@ -1209,7 +1431,8 @@ void disolverComuna(struct comuna** lista, struct comuna* comuna){
 
 /**
  * verificarDisoluciones: Verifica si alguna comuna debe disolverse.
- * Se disuelve si la necesidad es muy alta o la satisfaccion es muy baja.
+ * Se disuelve si la necesidad final es muy alta o la satisfaccion es muy baja.
+ * La necesidad final ya trae lo de las comunas vecinas y la reciprocidad.
  * Sus personas se reparten entre migracion y pobreza.
  * Si la lista queda vacia se vuelve NULL.
  */
