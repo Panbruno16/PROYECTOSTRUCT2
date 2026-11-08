@@ -881,6 +881,78 @@ void mostrarMenu(){
     printf("\n");
     printf("Selecciona una opcion: ");
 }
+/**
+*tunrnoComunas: administra de forma aleatoria lo que hagan el resto de comunas en un día
+*/
+void turnoComunas(struct comuna* lista){
+    int min = 0, max = 4;
+    comuna temp = lista;
+    int accion;
+
+    for (int i = 0; i < contarComunas(lista); i += 1){
+        accion = rand() % (max - min + 1) + min;
+        
+        if (temp->administrada == 1 || accion == 0){
+            continue;
+        }
+        if (accion == 1){
+
+            struct comuna* origen = temp;
+            int vecino = rand() % (1 - 0 + 1) + 1;
+            struct comuna* destino;
+            if (vecino == 1){
+                destino = origen->siguiente;
+            }else{
+                destino = origen->anterior;
+           
+
+            while (true){
+            
+            struct bien* bienActual = origen->bienes;
+
+            if (contarBienes(origen) == 0){
+                break;
+            }
+            
+            //Selecciona bien
+            int idxBien = rand() % (contarBienes(origen) - 1 + 1) + 1;
+            
+            if(idxBien<1 || idxBien>contarBienes(origen)){
+                //validacion por si sale un n umero invalido
+                continue;
+            }
+            char* nombreBien = NULL;
+            struct bien* actual = origen->bienes;
+            for(int i=1; i<idxBien && actual!=NULL; i++){
+                actual = actual->siguiente;
+            }
+            if(actual!=NULL){
+                nombreBien = actual->nombre;
+            }
+            if (actual == NULL || actual->actualCantidad <= 0){
+                continue;
+            }
+            
+            int cantidad = rand() % (actual->actualCantidad - 1 + 1) +1;
+            
+            int exito = realizarTransferencia(origen, destino, nombreBien, cantidad);
+            if(exito==1){
+                aumentarValores(origen, cantidad);
+                aumentarValores(destino, cantidad);
+                break;
+            }    
+        }else{
+            continue;
+            } 
+    temp = temp -> siguiente;
+    }
+
+
+    
+}
+
+
+
 
 /**
  * turnoDia: Maneja el turno del dia (jugador realiza transferencias).
@@ -922,9 +994,9 @@ void turnoDia(struct comuna* lista){
                 printf("No puedes transferir a la misma comuna.\n");
                 continue;
             }
-            if(origen->administrada==0 || destino->administrada==0){
-                printf("Solo puedes transferir entre tus 3 comunas.\n");
-                printf("Las demas comunas se manejan de forma autonoma.\n");
+            if(origen->administrada==0){
+                printf("Solo puedes transferir con tus 3 comunas.\n");
+                
                 continue;
             }
             if(origen->siguiente!=destino && origen->anterior!=destino){

@@ -286,6 +286,11 @@ void mostrarResumen(struct comuna* lista);
  */
 void mostrarMenu();
 
+/*
+*turnoDía:
+*/
+void turnoComunas(struct comuna* lista);
+
 /**
  * turnoDia: Maneja el turno del dia (jugador realiza transferencias).
  */

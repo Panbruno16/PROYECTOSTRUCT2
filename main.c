@@ -72,11 +72,13 @@ int main(){
     printf(GREEN "Tus comunas: %d\n" RESET, contarAdministradas(cabeza));
 
     int jugando = 1;
+    recalcularIndices(cabeza);
     while(jugando){
         estado.dia_actual = estado.dia_actual + 1;
         printf(CYAN BOLD "\nDIA %d\n" RESET, estado.dia_actual);
 
         turnoDia(cabeza);
+        turnoComunas(cabeza);
 
         turnoNoche(&cabeza);
 
