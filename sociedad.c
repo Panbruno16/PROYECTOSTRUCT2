@@ -32,6 +32,7 @@ struct comuna* crearComuna(char* nombre){
     nueva->regalosDados = 0;
     nueva->regalosRecibidos = 0;
     nueva->administrada = 0;
+    nueva->cache = NULL;
     nueva->siguiente = nueva;
     nueva->anterior = nueva;
     return nueva;
@@ -933,6 +934,8 @@ void liberarComuna(struct comuna* comuna){
         free(temporal);
         temporal = NULL;
     }
+    liberarSplay(comuna->cache);
+    comuna->cache = NULL;
     free(comuna);
     comuna = NULL;
 }
@@ -1251,6 +1254,282 @@ void liberarCatalogoLibros(){
 }
 
 /**
+ * pasarMinusculas: Pasa todo el texto a minusculas.
+ * Sirve para que "Quijote" y "quijote" se busquen igual y compartan la
+ * misma entrada en el arbol chaflaneado.
+ */
+void pasarMinusculas(char* texto){
+    int i = 0;
+    while(texto[i]!=0){
+        if(texto[i]>='A' && texto[i]<='Z'){
+            texto[i] = texto[i] + ('a' - 'A');
+        }
+        i = i + 1;
+    }
+}
+
+/**
+ * rotarDerechaSplay: Rota hacia la derecha el subarbol chaflaneado.
+ * El hijo izquierdo sube a ser la raiz y el nodo actual baja a ser su
+ * hijo derecho. Imprime la rotacion para que se vea el chaflaneo.
+ * Retorna la nueva raiz del subarbol.
+ */
+struct nodoSplay* rotarDerechaSplay(struct nodoSplay* nodo){
+    struct nodoSplay* centro = nodo->izquierda;
+    struct nodoSplay* temporal = centro->derecha;
+    centro->derecha = nodo;
+    nodo->izquierda = temporal;
+    printf("     rotacion zig a la derecha: %s sube a la raiz\n", centro->texto);
+    return centro;
+}
+
+/**
+ * rotarIzquierdaSplay: Rota hacia la izquierda el subarbol chaflaneado.
+ * El hijo derecho sube a ser la raiz y el nodo actual baja a ser su
+ * hijo izquierdo. Imprime la rotacion para que se vea el chaflaneo.
+ * Retorna la nueva raiz del subarbol.
+ */
+struct nodoSplay* rotarIzquierdaSplay(struct nodoSplay* nodo){
+    struct nodoSplay* centro = nodo->derecha;
+    struct nodoSplay* temporal = centro->izquierda;
+    centro->izquierda = nodo;
+    nodo->derecha = temporal;
+    printf("     rotacion zig a la izquierda: %s sube a la raiz\n", centro->texto);
+    return centro;
+}
+
+/**
+ * chaflanear: Sube hasta la raiz el nodo con el texto buscado.
+ * Si el texto ya esta en el cache solo se reacomoda el arbol, si no esta
+ * el arbol queda como estaba. Baja por el arbol comparando y despues
+ * sube con las rotaciones zig (simple), zig-zig y zig-zag.
+ * Cada rotacion que hace la imprime, para que se vea el chaflaneo.
+ * Retorna la nueva raiz del arbol.
+ */
+struct nodoSplay* chaflanear(struct nodoSplay* raiz, char* texto){
+    if(raiz==NULL){
+        return NULL;
+    }
+    int comparacion = strcmp(texto, raiz->texto);
+    if(comparacion==0){
+        return raiz;
+    }
+
+    if(comparacion<0){
+        if(raiz->izquierda==NULL){
+            return raiz;
+        }
+        int interna = strcmp(texto, raiz->izquierda->texto);
+        if(interna<0){
+            raiz->izquierda->izquierda = chaflanear(raiz->izquierda->izquierda, texto);
+            raiz = rotarDerechaSplay(raiz);
+        }
+        else if(interna>0){
+            raiz->izquierda->derecha = chaflanear(raiz->izquierda->derecha, texto);
+            if(raiz->izquierda->derecha!=NULL){
+                raiz->izquierda = rotarIzquierdaSplay(raiz->izquierda);
+            }
+        }
+        if(raiz->izquierda==NULL){
+            return raiz;
+        }
+        return rotarDerechaSplay(raiz);
+    }
+
+    if(raiz->derecha==NULL){
+        return raiz;
+    }
+    int interna = strcmp(texto, raiz->derecha->texto);
+    if(interna>0){
+        raiz->derecha->derecha = chaflanear(raiz->derecha->derecha, texto);
+        raiz = rotarIzquierdaSplay(raiz);
+    }
+    else if(interna<0){
+        raiz->derecha->izquierda = chaflanear(raiz->derecha->izquierda, texto);
+        if(raiz->derecha->izquierda!=NULL){
+            raiz->derecha = rotarDerechaSplay(raiz->derecha);
+        }
+    }
+    if(raiz->derecha==NULL){
+        return raiz;
+    }
+    return rotarIzquierdaSplay(raiz);
+}
+
+/**
+ * guardarEnCache: Agrega el resultado de una busqueda al arbol chaflaneado
+ * y lo deja en la raiz, asi la proxima vez se encuentra en el primer
+ * intento. Si el texto ya estaba no lo vuelve a agregar.
+ * Retorna la nueva raiz del arbol.
+ */
+struct nodoSplay* guardarEnCache(struct nodoSplay* raiz, char* texto, char archivos[][50], int cantidad){
+    struct nodoSplay* nuevo = calloc(1, sizeof(struct nodoSplay));
+    strcpy(nuevo->texto, texto);
+    nuevo->cantidadArchivos = cantidad;
+    int i = 0;
+    while(i<cantidad && i<50){
+        strcpy(nuevo->archivos[i], archivos[i]);
+        i = i + 1;
+    }
+    nuevo->izquierda = NULL;
+    nuevo->derecha = NULL;
+
+    if(raiz==NULL){
+        return nuevo;
+    }
+    if(strcmp(texto, raiz->texto)<0){
+        nuevo->izquierda = raiz->izquierda;
+        nuevo->derecha = raiz;
+        raiz->izquierda = NULL;
+    }
+    else{
+        nuevo->derecha = raiz->derecha;
+        nuevo->izquierda = raiz;
+        raiz->derecha = NULL;
+    }
+    return nuevo;
+}
+
+/**
+ * buscarTextoEnArchivos: Recorre todos los .txt de la carpeta (el corpus)
+ * y junta los nombres de los archivos que contienen el texto.
+ * La comparacion no distingue mayusculas de minusculas y se hace linea por
+ * linea. Retorna la cantidad de archivos encontrados, hasta el maximo.
+ */
+int buscarTextoEnArchivos(char* texto, char archivos[][50], int maximo){
+    DIR* carpeta = opendir(".");
+    if(carpeta==NULL){
+        printf("Error: no se pudo abrir la carpeta del juego\n");
+        return 0;
+    }
+    struct dirent* entrada;
+    int encontrados = 0;
+    while((entrada = readdir(carpeta))!=NULL && encontrados<maximo){
+        char* nombre = entrada->d_name;
+        int largo = strlen(nombre);
+        if(largo>4 && strcmp(nombre+largo-4, ".txt")==0 && strcmp(nombre, "record.txt")!=0){
+            FILE* libro = fopen(nombre, "r");
+            if(libro!=NULL){
+                char linea[500];
+                int contiene = 0;
+                while(fgets(linea, 500, libro) && contiene==0){
+                    pasarMinusculas(linea);
+                    if(strstr(linea, texto)!=NULL){
+                        contiene = 1;
+                    }
+                }
+                fclose(libro);
+                if(contiene==1){
+                    strcpy(archivos[encontrados], nombre);
+                    encontrados = encontrados + 1;
+                }
+            }
+        }
+    }
+    closedir(carpeta);
+    return encontrados;
+}
+
+/**
+ * mostrarArchivos: Imprime la lista de nombres de archivos que contienen
+ * el texto buscado.
+ */
+void mostrarArchivos(char archivos[][50], int cantidad){
+    if(cantidad==0){
+        printf("  Ningun libro contiene ese texto\n");
+        return;
+    }
+    printf("  Libros que lo contienen:\n");
+    int i = 0;
+    while(i<cantidad){
+        printf("    %d. %s\n", i+1, archivos[i]);
+        i = i + 1;
+    }
+}
+
+/**
+ * leerLinea: Lee una linea completa desde el teclado, hasta el salto de
+ * linea. Sirve para buscar textos con espacios.
+ * Descarta el salto de linea que dejo la lectura anterior del menu.
+ * Retorna 1 si leyo algo y 0 si se acabo la entrada (EOF).
+ */
+int leerLinea(char* destino, int maximo){
+    int c = getchar();
+    while(c==' ' || c=='\t' || c=='\r' || c=='\n'){
+        c = getchar();
+    }
+    if(c==EOF){
+        destino[0] = 0;
+        return 0;
+    }
+    int posicion = 0;
+    while(c!='\n' && c!='\r' && c!=EOF && posicion<maximo-1){
+        destino[posicion] = (char)c;
+        posicion = posicion + 1;
+        c = getchar();
+    }
+    destino[posicion] = 0;
+    while(c!='\n' && c!='\r' && c!=EOF){
+        c = getchar();
+    }
+    return 1;
+}
+
+/**
+ * buscarTextoEnLibros: Pide un texto al jugador y busca en los libros que
+ * lo contienen.
+ * Primero mira el arbol chaflaneado de esa biblioteca (cache): si el texto
+ * ya se busco antes lo trae hasta la raiz con rotaciones y no vuelve a
+ * recorrer los archivos. Si no esta, recorre los archivos, guarda el
+ * resultado en el arbol y lo deja en la raiz.
+ */
+void buscarTextoEnLibros(struct comuna* biblioteca){
+    if(biblioteca==NULL){
+        return;
+    }
+    printf("Texto a buscar (puede llevar espacios): ");
+    char texto[50];
+    if(leerLinea(texto, 50)==0){
+        printf("\nSe acabo la entrada.\n");
+        return;
+    }
+    if(texto[0]==0){
+        printf("No escribiste ningun texto.\n");
+        return;
+    }
+    pasarMinusculas(texto);
+
+    printf("Buscando en el arbol chaflaneado de %s...\n", biblioteca->nombre);
+    biblioteca->cache = chaflanear(biblioteca->cache, texto);
+
+    if(biblioteca->cache!=NULL && strcmp(biblioteca->cache->texto, texto)==0){
+        printf("ESTABA EN EL CACHE: no se tocaron los archivos, solo se chaflaneo el arbol.\n");
+        mostrarArchivos(biblioteca->cache->archivos, biblioteca->cache->cantidadArchivos);
+        return;
+    }
+
+    printf("No estaba en el cache: se buscaron los archivos del corpus.\n");
+    char archivos[50][50];
+    int encontrados = buscarTextoEnArchivos(texto, archivos, 50);
+    biblioteca->cache = guardarEnCache(biblioteca->cache, texto, archivos, encontrados);
+    printf("Resultado guardado en el arbol chaflaneado, quedo en la raiz.\n");
+    mostrarArchivos(archivos, encontrados);
+}
+
+/**
+ * liberarSplay: Libera todos los nodos de un arbol chaflaneado.
+ * Va primero por los hijos y al final libera el nodo actual.
+ */
+void liberarSplay(struct nodoSplay* raiz){
+    if(raiz==NULL){
+        return;
+    }
+    liberarSplay(raiz->izquierda);
+    liberarSplay(raiz->derecha);
+    free(raiz);
+}
+
+/**
  * mostrarMenuBiblioteca: Muestra el menu de la biblioteca comunitaria.
  */
 void mostrarMenuBiblioteca(){
@@ -1258,8 +1537,9 @@ void mostrarMenuBiblioteca(){
     printf("########################################\n");
     printf("#  BIBLIOTECA COMUNITARIA\n");
     printf("########################################\n");
-    printf("#  [1] Buscar libro por nombre\n");
-    printf("#  [2] Volver al menu\n");
+    printf("#  [1] Buscar texto en los libros\n");
+    printf("#  [2] Buscar libro por nombre\n");
+    printf("#  [3] Volver al menu\n");
     printf("########################################\n");
     printf("\n");
     printf("Selecciona una opcion: ");
@@ -1354,9 +1634,12 @@ int irALaBiblioteca(struct comuna* lista){
             continue;
         }
         if(opcion==1){
-            buscarLibroPorNombre();
+            buscarTextoEnLibros(biblioteca);
         }
         else if(opcion==2){
+            buscarLibroPorNombre();
+        }
+        else if(opcion==3){
             seguir = 0;
         }
         else{

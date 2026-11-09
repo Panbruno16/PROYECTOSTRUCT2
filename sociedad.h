@@ -32,6 +32,22 @@ struct nodoAVL{
 // Arbol AVL con los nombres de todos los libros del corpus
 extern struct nodoAVL* catalogoLibros;
 
+/**
+ * nodoSplay: Nodo del arbol chaflaneado que hace de cache en la biblioteca
+ * de cada comuna.
+ * Guarda el texto que se busco, hasta 50 nombres de archivos que lo
+ * contienen y los dos hijos.
+ * Es una cache: si el texto ya se busco antes no se vuelven a recorrer los
+ * archivos, solo se trae el nodo hasta la raiz con las rotaciones.
+ */
+struct nodoSplay{
+    char texto[50];
+    int cantidadArchivos;
+    char archivos[50][50];
+    struct nodoSplay* izquierda;
+    struct nodoSplay* derecha;
+};
+
 //Moldes
 
 /**
@@ -87,6 +103,7 @@ struct comuna {
     int regalosDados;
     int regalosRecibidos;
     int administrada;
+    struct nodoSplay* cache;
     struct comuna* siguiente;
     struct comuna* anterior;
 };
@@ -454,6 +471,82 @@ void buscarLibroPorNombre();
  * Retorna 1 si la entrada sigue viva y 0 si se acabo la entrada (EOF).
  */
 int irALaBiblioteca(struct comuna* lista);
+
+/**
+ * pasarMinusculas: Pasa todo el texto a minusculas.
+ * Sirve para que "Quijote" y "quijote" se busquen igual y compartan la
+ * misma entrada en el arbol chaflaneado.
+ */
+void pasarMinusculas(char* texto);
+
+/**
+ * rotarDerechaSplay: Rota hacia la derecha el subarbol chaflaneado.
+ * El hijo izquierdo sube a ser la raiz. Imprime la rotacion para que se
+ * vea que el arbol se esta chaflaneando.
+ * Retorna la nueva raiz del subarbol.
+ */
+struct nodoSplay* rotarDerechaSplay(struct nodoSplay* nodo);
+
+/**
+ * rotarIzquierdaSplay: Rota hacia la izquierda el subarbol chaflaneado.
+ * El hijo derecho sube a ser la raiz. Imprime la rotacion para que se
+ * vea que el arbol se esta chaflaneando.
+ * Retorna la nueva raiz del subarbol.
+ */
+struct nodoSplay* rotarIzquierdaSplay(struct nodoSplay* nodo);
+
+/**
+ * chaflanear: Sube hasta la raiz el nodo con el texto buscado.
+ * Si el texto ya esta en el cache solo se reacomoda el arbol, si no esta
+ * el arbol queda como estaba. Usa las rotaciones zig (simple), zig-zig y
+ * zig-zag, e imprime cada rotacion que hace.
+ * Retorna la nueva raiz del arbol.
+ */
+struct nodoSplay* chaflanear(struct nodoSplay* raiz, char* texto);
+
+/**
+ * guardarEnCache: Agrega el resultado de una busqueda al arbol chaflaneado
+ * y lo deja en la raiz para la proxima vez.
+ * Retorna la nueva raiz del arbol.
+ */
+struct nodoSplay* guardarEnCache(struct nodoSplay* raiz, char* texto, char archivos[][50], int cantidad);
+
+/**
+ * buscarTextoEnArchivos: Recorre todos los .txt de la carpeta (el corpus)
+ * y junta los nombres de los archivos que contienen el texto.
+ * La comparacion no distingue mayusculas de minusculas y se hace linea por
+ * linea. Retorna la cantidad de archivos encontrados, hasta el maximo.
+ */
+int buscarTextoEnArchivos(char* texto, char archivos[][50], int maximo);
+
+/**
+ * mostrarArchivos: Imprime la lista de nombres de archivos que contienen
+ * el texto buscado.
+ */
+void mostrarArchivos(char archivos[][50], int cantidad);
+
+/**
+ * leerLinea: Lee una linea completa desde el teclado, hasta el salto de
+ * linea. Sirve para buscar textos con espacios.
+ * Descarta el salto de linea que dejo la lectura anterior del menu.
+ * Retorna 1 si leyo algo y 0 si se acabo la entrada (EOF).
+ */
+int leerLinea(char* destino, int maximo);
+
+/**
+ * buscarTextoEnLibros: Pide un texto al jugador y busca en los libros que
+ * lo contienen.
+ * Primero mira el arbol chaflaneado de esa biblioteca (cache): si el texto
+ * ya se busco antes lo trae hasta la raiz con rotaciones y no vuelve a
+ * recorrer los archivos. Si no esta, recorre los archivos, guarda el
+ * resultado en el arbol y lo deja en la raiz.
+ */
+void buscarTextoEnLibros(struct comuna* biblioteca);
+
+/**
+ * liberarSplay: Libera todos los nodos de un arbol chaflaneado.
+ */
+void liberarSplay(struct nodoSplay* raiz);
 
 /**
  * turnoComunas: Maneja el turno de las comunas que no administra el jugador.
