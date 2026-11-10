@@ -70,13 +70,30 @@ struct servicio {
 };
 
 /**
+ * libroLeido: Un libro que la persona ya leyo en la biblioteca.
+ * Guarda el nombre del archivo y el siguiente libro leido.
+ * La lista existe para no volver a contar un libro dos veces.
+ */
+struct libroLeido {
+    char nombre[50];
+    struct libroLeido* siguiente;
+};
+
+/**
  * Estructura que representa una persona en la sociedad.
  * Lleva su propia lista de servicios (los oficios que sabe).
  * Si la lista es NULL significa que no sabe hacer nada.
+ * El campo librosLeidos cuenta cuantos libros ha leido en la biblioteca
+ * y la lista libros guarda cuales, para no repetir ninguno.
+ * El campo aprendioLeyendo vale 1 cuando ya aprendio un servicio por
+ * haber leido 3 libros o mas, y 0 si todavia no le tocaba.
  */
 struct persona {
     char nombre[50];
     struct servicio* servicios;
+    int librosLeidos;
+    int aprendioLeyendo;
+    struct libroLeido* libros;
     struct persona* siguiente;
 };
 
@@ -180,6 +197,39 @@ int agregarBienes(struct comuna* comuna, char* nombreArchivo);
  * Inserta el servicio al inicio de la lista enlazada de la persona.
  */
 void agregarServicioAPersona(struct persona* persona, char* nombre);
+
+/**
+ * agregarLibroLeido: Anota un libro en la lista de libros leidos de la
+ * persona. Inserta el libro al inicio de la lista y sube su contador.
+ */
+void agregarLibroLeido(struct persona* persona, char* nombre);
+
+/**
+ * personaYaLeyo: Revisa si la persona ya leyo ese libro antes.
+ * Retorna 1 si ya lo leyo y 0 si todavia no.
+ */
+int personaYaLeyo(struct persona* persona, char* nombre);
+
+/**
+ * liberarLibrosLeidos: Libera la lista de libros leidos de una persona.
+ * Se llama cuando se libera la comuna y sus habitantes.
+ */
+void liberarLibrosLeidos(struct persona* persona);
+
+/**
+ * personaTieneServicio: Revisa si la persona ya sabe ese oficio.
+ * Retorna 1 si lo sabe y 0 si no.
+ */
+int personaTieneServicio(struct persona* persona, char* nombre);
+
+/**
+ * aprenderServicioPorLectura: La persona aprende un servicio nuevo por
+ * haber leido libros en la biblioteca.
+ * Mira la carpeta de servicios, junta los oficios que la persona todavia
+ * no sabe y elige uno al azar entre esos.
+ * Retorna 1 si aprendio algo y 0 si no quedan oficios por aprender.
+ */
+int aprenderServicioPorLectura(struct persona* persona);
 
 /**
  * migrarPersona: Mueve una persona de una comuna a otra llevandose sus oficios.
@@ -534,14 +584,26 @@ void mostrarArchivos(char archivos[][50], int cantidad);
 int leerLinea(char* destino, int maximo);
 
 /**
+ * anotarLectura: Anota los libros que acaba de leer la persona.
+ * Cada archivo que muestra la busqueda es un libro leido, pero si la
+ * persona ya lo habia leido antes no se vuelve a contar.
+ * Cuando la persona llega a 3 libros o mas aprende un servicio nuevo,
+ * una sola vez.
+ * Imprime cuantos libros lleva y si aprendio algo.
+ */
+void anotarLectura(struct persona* lector, char archivos[][50], int cantidad);
+
+/**
  * buscarTextoEnLibros: Pide un texto al jugador y busca en los libros que
  * lo contienen.
  * Primero mira el arbol chaflaneado de esa biblioteca (cache): si el texto
  * ya se busco antes lo trae hasta la raiz con rotaciones y no vuelve a
  * recorrer los archivos. Si no esta, recorre los archivos, guarda el
  * resultado en el arbol y lo deja en la raiz.
+ * Cada archivo que muestra lo anota como leido por la persona que hizo la
+ * busqueda, y con 3 libros o mas esa persona aprende un servicio nuevo.
  */
-void buscarTextoEnLibros(struct comuna* biblioteca);
+void buscarTextoEnLibros(struct comuna* biblioteca, struct persona* lector);
 
 /**
  * liberarSplay: Libera todos los nodos de un arbol chaflaneado.

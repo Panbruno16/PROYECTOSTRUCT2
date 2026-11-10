@@ -81,6 +81,10 @@ void agregarBien(struct comuna* comuna, char* nombre, int maximaCantidad, int ac
 void agregarPersona(struct comuna* comuna, char* nombre){
     struct persona* nuevo = calloc(1, sizeof(struct persona));
     strcpy(nuevo->nombre, nombre);
+    nuevo->servicios = NULL;
+    nuevo->librosLeidos = 0;
+    nuevo->aprendioLeyendo = 0;
+    nuevo->libros = NULL;
     nuevo->siguiente = comuna->habitantes;
     comuna->habitantes = nuevo;
 }
@@ -300,7 +304,7 @@ void mostrarPersonas(struct comuna* comuna){
     struct persona* actual = comuna->habitantes;
     int contador = 1;
     while(actual!=NULL){
-        printf("#  %d. %s\n", contador, actual->nombre);
+        printf("#  %d. %s (libros leidos: %d)\n", contador, actual->nombre, actual->librosLeidos);
         contador = contador + 1;
         actual = actual->siguiente;
     }
@@ -929,6 +933,7 @@ void liberarComuna(struct comuna* comuna){
             temporalServicio = NULL;
         }
         personaActual->servicios = NULL;
+        liberarLibrosLeidos(personaActual);
         struct persona* temporal = personaActual;
         personaActual = personaActual->siguiente;
         free(temporal);
@@ -1476,14 +1481,158 @@ int leerLinea(char* destino, int maximo){
 }
 
 /**
+ * agregarLibroLeido: Anota un libro en la lista de libros leidos de la
+ * persona. Inserta el libro al inicio de la lista enlazada y sube su
+ * contador de libros leidos.
+ */
+void agregarLibroLeido(struct persona* persona, char* nombre){
+    if(persona==NULL){
+        return;
+    }
+    struct libroLeido* nuevo = calloc(1, sizeof(struct libroLeido));
+    strcpy(nuevo->nombre, nombre);
+    nuevo->siguiente = persona->libros;
+    persona->libros = nuevo;
+    persona->librosLeidos = persona->librosLeidos + 1;
+}
+
+/**
+ * personaYaLeyo: Revisa si la persona ya leyo ese libro antes.
+ * Recorre la lista de libros leidos comparando los nombres.
+ * Retorna 1 si ya lo leyo y 0 si todavia no.
+ */
+int personaYaLeyo(struct persona* persona, char* nombre){
+    if(persona==NULL){
+        return 0;
+    }
+    struct libroLeido* actual = persona->libros;
+    while(actual!=NULL){
+        if(strcmp(actual->nombre, nombre)==0){
+            return 1;
+        }
+        actual = actual->siguiente;
+    }
+    return 0;
+}
+
+/**
+ * liberarLibrosLeidos: Libera la lista de libros leidos de una persona.
+ * Va primero por el siguiente libro y al final libera el actual.
+ * Se llama cuando se libera la comuna y sus habitantes.
+ */
+void liberarLibrosLeidos(struct persona* persona){
+    if(persona==NULL){
+        return;
+    }
+    struct libroLeido* actual = persona->libros;
+    while(actual!=NULL){
+        struct libroLeido* temporal = actual;
+        actual = actual->siguiente;
+        free(temporal);
+        temporal = NULL;
+    }
+    persona->libros = NULL;
+}
+
+/**
+ * personaTieneServicio: Revisa si la persona ya sabe ese oficio.
+ * Recorre la lista de servicios comparando los nombres.
+ * Retorna 1 si lo sabe y 0 si no.
+ */
+int personaTieneServicio(struct persona* persona, char* nombre){
+    if(persona==NULL){
+        return 0;
+    }
+    struct servicio* actual = persona->servicios;
+    while(actual!=NULL){
+        if(strcmp(actual->nombre, nombre)==0){
+            return 1;
+        }
+        actual = actual->siguiente;
+    }
+    return 0;
+}
+
+/**
+ * aprenderServicioPorLectura: La persona aprende un servicio nuevo por
+ * haber leido libros en la biblioteca.
+ * Mira la carpeta de servicios, junta los oficios que la persona todavia
+ * no sabe y elige uno al azar entre esos. Si ya sabe todos no aprende nada.
+ * Retorna 1 si aprendio algo y 0 si no quedan oficios por aprender.
+ */
+int aprenderServicioPorLectura(struct persona* persona){
+    if(persona==NULL){
+        return 0;
+    }
+    FILE* archivo = fopen("servicios", "r");
+    if(archivo==NULL){
+        printf("  Aviso: no se pudo abrir la carpeta de servicios\n");
+        return 0;
+    }
+    char disponibles[20][50];
+    int total = 0;
+    char linea[50];
+    while(fgets(linea, 50, archivo)!=NULL && total<20){
+        linea[strcspn(linea, "\n")] = 0;
+        if(linea[0]!=0 && personaTieneServicio(persona, linea)==0){
+            strcpy(disponibles[total], linea);
+            total = total + 1;
+        }
+    }
+    fclose(archivo);
+    if(total==0){
+        printf("  %s ya sabe todos los servicios del catalogo\n", persona->nombre);
+        return 0;
+    }
+    int azar = rand() % total;
+    agregarServicioAPersona(persona, disponibles[azar]);
+    printf("  %s aprendio el servicio: %s\n", persona->nombre, disponibles[azar]);
+    return 1;
+}
+
+/**
+ * anotarLectura: Anota los libros que acaba de leer la persona.
+ * Cada archivo que muestra la busqueda es un libro leido, pero si la
+ * persona ya lo habia leido antes no se vuelve a contar.
+ * Cuando llega a 3 libros o mas aprende un servicio nuevo, y eso pasa
+ * una sola vez.
+ * Imprime cuantos libros llevo y si aprendio algo.
+ */
+void anotarLectura(struct persona* lector, char archivos[][50], int cantidad){
+    if(lector==NULL){
+        return;
+    }
+    int nuevos = 0;
+    int i = 0;
+    while(i<cantidad){
+        if(personaYaLeyo(lector, archivos[i])==0){
+            agregarLibroLeido(lector, archivos[i]);
+            nuevos = nuevos + 1;
+        }
+        i = i + 1;
+    }
+    if(nuevos==0){
+        printf("  %s no encontro libros nuevos: esos ya los habia leido\n", lector->nombre);
+        return;
+    }
+    printf("  %s leyo %d libro(s) nuevo(s), ya lleva %d leido(s)\n", lector->nombre, nuevos, lector->librosLeidos);
+    if(lector->librosLeidos>=3 && lector->aprendioLeyendo==0){
+        lector->aprendioLeyendo = 1;
+        aprenderServicioPorLectura(lector);
+    }
+}
+
+/**
  * buscarTextoEnLibros: Pide un texto al jugador y busca en los libros que
  * lo contienen.
  * Primero mira el arbol chaflaneado de esa biblioteca (cache): si el texto
  * ya se busco antes lo trae hasta la raiz con rotaciones y no vuelve a
  * recorrer los archivos. Si no esta, recorre los archivos, guarda el
  * resultado en el arbol y lo deja en la raiz.
+ * Cada archivo que muestra lo anota como leido por la persona que hizo la
+ * busqueda, y con 3 libros o mas esa persona aprende un servicio nuevo.
  */
-void buscarTextoEnLibros(struct comuna* biblioteca){
+void buscarTextoEnLibros(struct comuna* biblioteca, struct persona* lector){
     if(biblioteca==NULL){
         return;
     }
@@ -1505,6 +1654,7 @@ void buscarTextoEnLibros(struct comuna* biblioteca){
     if(biblioteca->cache!=NULL && strcmp(biblioteca->cache->texto, texto)==0){
         printf("ESTABA EN EL CACHE: no se tocaron los archivos, solo se chaflaneo el arbol.\n");
         mostrarArchivos(biblioteca->cache->archivos, biblioteca->cache->cantidadArchivos);
+        anotarLectura(lector, biblioteca->cache->archivos, biblioteca->cache->cantidadArchivos);
         return;
     }
 
@@ -1514,6 +1664,7 @@ void buscarTextoEnLibros(struct comuna* biblioteca){
     biblioteca->cache = guardarEnCache(biblioteca->cache, texto, archivos, encontrados);
     printf("Resultado guardado en el arbol chaflaneado, quedo en la raiz.\n");
     mostrarArchivos(archivos, encontrados);
+    anotarLectura(lector, archivos, encontrados);
 }
 
 /**
@@ -1634,7 +1785,7 @@ int irALaBiblioteca(struct comuna* lista){
             continue;
         }
         if(opcion==1){
-            buscarTextoEnLibros(biblioteca);
+            buscarTextoEnLibros(biblioteca, lectora);
         }
         else if(opcion==2){
             buscarLibroPorNombre();
