@@ -1681,6 +1681,70 @@ void liberarSplay(struct nodoSplay* raiz){
 }
 
 /**
+ * contarSplay: Cuenta cuantas busquedas estan guardadas en el arbol
+ * chaflaneado. Cuenta el nodo actual mas lo que salga de los dos hijos.
+ * Retorna la cantidad de nodos.
+ */
+int contarSplay(struct nodoSplay* raiz){
+    if(raiz==NULL){
+        return 0;
+    }
+    return 1 + contarSplay(raiz->izquierda) + contarSplay(raiz->derecha);
+}
+
+/**
+ * mostrarSplay: Dibuja en pantalla el arbol chaflaneado de una biblioteca.
+ * Cada linea es un nodo: la raiz arriba y los hijos sangrados abajo, el
+ * izquierdo con una barra / y el derecho con \, para que se vea la forma
+ * que el arbol tiene ahora mismo.
+ * Se llama con el arbol completo, el nivel 0 y esIzquierdo 1.
+ */
+void mostrarSplay(struct nodoSplay* raiz, int nivel, int esIzquierdo){
+    if(raiz==NULL){
+        return;
+    }
+    int i = 0;
+    while(i<nivel){
+        printf("    ");
+        i = i + 1;
+    }
+    if(nivel==0){
+        printf("%s (raiz)\n", raiz->texto);
+    }
+    else if(esIzquierdo==1){
+        printf("/ %s\n", raiz->texto);
+    }
+    else{
+        printf("\\ %s\n", raiz->texto);
+    }
+    mostrarSplay(raiz->izquierda, nivel+1, 1);
+    mostrarSplay(raiz->derecha, nivel+1, 0);
+}
+
+/**
+ * verArbolChaflaneado: Muestra en pantalla el arbol chaflaneado de la
+ * biblioteca de esa comuna, con la cantidad de busquedas guardadas.
+ * Si todavia no se ha buscado nada dice que esta vacio.
+ */
+void verArbolChaflaneado(struct comuna* biblioteca){
+    if(biblioteca==NULL){
+        return;
+    }
+    printf("\n");
+    printf("########################################\n");
+    printf("#  ARBOL CHAFLANEADO DE %s\n", biblioteca->nombre);
+    printf("#  (cache de las busquedas de texto)\n");
+    if(biblioteca->cache==NULL){
+        printf("#  Todavia no se ha guardado ninguna busqueda\n");
+        printf("########################################\n");
+        return;
+    }
+    printf("#  %d busqueda(s) guardada(s)\n", contarSplay(biblioteca->cache));
+    printf("########################################\n");
+    mostrarSplay(biblioteca->cache, 0, 1);
+}
+
+/**
  * mostrarMenuBiblioteca: Muestra el menu de la biblioteca comunitaria.
  */
 void mostrarMenuBiblioteca(){
@@ -1690,7 +1754,8 @@ void mostrarMenuBiblioteca(){
     printf("########################################\n");
     printf("#  [1] Buscar texto en los libros\n");
     printf("#  [2] Buscar libro por nombre\n");
-    printf("#  [3] Volver al menu\n");
+    printf("#  [3] Ver el arbol chaflaneado\n");
+    printf("#  [4] Volver al menu\n");
     printf("########################################\n");
     printf("\n");
     printf("Selecciona una opcion: ");
@@ -1791,6 +1856,9 @@ int irALaBiblioteca(struct comuna* lista){
             buscarLibroPorNombre();
         }
         else if(opcion==3){
+            verArbolChaflaneado(biblioteca);
+        }
+        else if(opcion==4){
             seguir = 0;
         }
         else{

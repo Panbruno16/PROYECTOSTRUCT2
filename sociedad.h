@@ -606,6 +606,28 @@ void anotarLectura(struct persona* lector, char archivos[][50], int cantidad);
 void buscarTextoEnLibros(struct comuna* biblioteca, struct persona* lector);
 
 /**
+ * contarSplay: Cuenta cuantas busquedas estan guardadas en el arbol
+ * chaflaneado. Retorna la cantidad de nodos.
+ */
+int contarSplay(struct nodoSplay* raiz);
+
+/**
+ * mostrarSplay: Dibuja en pantalla el arbol chaflaneado de una biblioteca.
+ * Cada linea es un nodo: la raiz arriba y los hijos sangrados abajo, el
+ * izquierdo con una barra / y el derecho con \, para que se vea la forma
+ * que el arbol tiene ahora mismo.
+ * Se llama con el arbol completo, el nivel 0 y esIzquierdo 1.
+ */
+void mostrarSplay(struct nodoSplay* raiz, int nivel, int esIzquierdo);
+
+/**
+ * verArbolChaflaneado: Muestra en pantalla el arbol chaflaneado de la
+ * biblioteca de esa comuna, con la cantidad de busquedas guardadas.
+ * Si todavia no se ha buscado nada dice que esta vacio.
+ */
+void verArbolChaflaneado(struct comuna* biblioteca);
+
+/**
  * liberarSplay: Libera todos los nodos de un arbol chaflaneado.
  */
 void liberarSplay(struct nodoSplay* raiz);
