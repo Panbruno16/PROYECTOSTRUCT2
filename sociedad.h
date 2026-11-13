@@ -1,6 +1,8 @@
 #ifndef SOCIEDAD_H
 #define SOCIEDAD_H
 
+#include <stdio.h>
+
 /**
  * Estructura global del juego.
  * Contiene el estado general de la sociedad.
@@ -435,8 +437,10 @@ void mostrarResumen(struct comuna* lista);
 
 /**
  * mostrarMenu: Muestra el menu de opciones del jugador.
+ * Si guardarDisponible es 1 imprime tambien la opcion 6 de guardar
+ * partida, que solo aparece en los dias multiplos de 5.
  */
-void mostrarMenu();
+void mostrarMenu(int guardarDisponible);
 
 /**
  * alturaAVL: Devuelve la altura de un nodo del arbol AVL.
@@ -631,6 +635,63 @@ void verArbolChaflaneado(struct comuna* biblioteca);
  * liberarSplay: Libera todos los nodos de un arbol chaflaneado.
  */
 void liberarSplay(struct nodoSplay* raiz);
+
+/**
+ * existePartida: Revisa si ya hay una partida guardada en ese slot.
+ * Abre el archivo solo para mirar si existe y lo cierra.
+ * Retorna 1 si hay partida y 0 si el slot esta vacio.
+ */
+int existePartida(int slot);
+
+/**
+ * guardarEstado: Escribe en el archivo los 7 campos del estado del juego:
+ * dias, turnos, record, bloqueo, consumo pausado, pobreza y personas fuera.
+ */
+void guardarEstado(FILE* archivo);
+
+/**
+ * guardarBienes: Escribe la lista de bienes de una comuna, uno por linea,
+ * con su maximo, su cantidad actual y su nombre.
+ */
+void guardarBienes(FILE* archivo, struct comuna* comuna);
+
+/**
+ * guardarPersonas: Escribe la lista de habitantes de una comuna con sus
+ * servicios, sus libros leidos y si ya aprendio algo por lectura.
+ * Los oficios se escriben completos porque algunos traen espacios, como
+ * "Cuidado infantil".
+ */
+void guardarPersonas(FILE* archivo, struct comuna* comuna);
+
+/**
+ * guardarSplay: Escribe el arbol chaflaneado en preorden (raiz, izquierdo,
+ * derecho). Si el nodo es NULL escribe NULO, asi al cargar se reconstruye
+ * exactamente la misma forma del arbol.
+ */
+void guardarSplay(FILE* archivo, struct nodoSplay* raiz);
+
+/**
+ * guardarComuna: Escribe en el archivo todos los datos de una comuna:
+ * su nombre, si es del jugador, sus indices, sus bienes, sus habitantes
+ * y su arbol chaflaneado.
+ */
+void guardarComuna(FILE* archivo, struct comuna* comuna);
+
+/**
+ * guardarPartida: Guarda toda la sociedad y el estado en el archivo
+ * partidaN. Escribe primero un archivo temporal y lo renombra, para que
+ * si se corta el programa no quede una partida a medias.
+ * Retorna 1 si guardo y 0 si hubo error.
+ */
+int guardarPartida(struct comuna* lista, int slot);
+
+/**
+ * pedirGuardarPartida: Pide en que slot guardar y guarda la partida.
+ * Muestra los 3 slots, avisa si ya hay una partida ahi y pregunta antes
+ * de sobrescribir.
+ * Retorna 1 si guardo y 0 si no (entrada invalida, cancelo o hubo error).
+ */
+int pedirGuardarPartida(struct comuna* lista);
 
 /**
  * turnoComunas: Maneja el turno de las comunas que no administra el jugador.

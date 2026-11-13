@@ -1059,9 +1059,248 @@ void mostrarResumen(struct comuna* lista){
 }
 
 /**
- * mostrarMenu: Muestra el menu de opciones del jugador.
+ * existePartida: Revisa si ya hay una partida guardada en ese slot.
+ * Abre el archivo solo para mirar si existe y lo cierra.
+ * Retorna 1 si hay partida y 0 si el slot esta vacio.
  */
-void mostrarMenu(){
+int existePartida(int slot){
+    if(slot<1 || slot>3){
+        return 0;
+    }
+    char nombre[20];
+    sprintf(nombre, "partida%d", slot);
+    FILE* archivo = fopen(nombre, "r");
+    if(archivo==NULL){
+        return 0;
+    }
+    fclose(archivo);
+    return 1;
+}
+
+/**
+ * guardarEstado: Escribe en el archivo los 7 campos del estado del juego:
+ * dias, turnos, record, bloqueo, consumo pausado, pobreza y personas fuera.
+ */
+void guardarEstado(FILE* archivo){
+    fprintf(archivo, "DIA %d\n", estado.dia_actual);
+    fprintf(archivo, "TURNOS %d\n", estado.turnos_disponibles);
+    fprintf(archivo, "RECORD %d\n", estado.record_dias);
+    fprintf(archivo, "BLOQUEO %d\n", estado.transferencias_bloqueadas);
+    fprintf(archivo, "CONSUMO %d\n", estado.consumo_pausado);
+    fprintf(archivo, "POBREZA %g\n", estado.pobreza_global);
+    fprintf(archivo, "FUERA %d\n", estado.personas_fuera);
+}
+
+/**
+ * guardarBienes: Escribe la lista de bienes de una comuna, uno por linea,
+ * con su maximo, su cantidad actual y su nombre. El nombre va al final
+ * porque puede traer espacios.
+ */
+void guardarBienes(FILE* archivo, struct comuna* comuna){
+    int total = 0;
+    struct bien* bienActual = comuna->bienes;
+    while(bienActual!=NULL){
+        total = total + 1;
+        bienActual = bienActual->siguiente;
+    }
+    fprintf(archivo, "BIENES %d\n", total);
+    bienActual = comuna->bienes;
+    while(bienActual!=NULL){
+        fprintf(archivo, "BIEN %d %d %s\n", bienActual->maximaCantidad, bienActual->actualCantidad, bienActual->nombre);
+        bienActual = bienActual->siguiente;
+    }
+}
+
+/**
+ * guardarPersonas: Escribe la lista de habitantes de una comuna.
+ * Por cada persona va su nombre, sus servicios (uno por linea, porque hay
+ * oficios con espacios como "Cuidado infantil"), sus libros leidos y si
+ * ya aprendio un servicio por lectura.
+ */
+void guardarPersonas(FILE* archivo, struct comuna* comuna){
+    int total = 0;
+    struct persona* personaActual = comuna->habitantes;
+    while(personaActual!=NULL){
+        total = total + 1;
+        personaActual = personaActual->siguiente;
+    }
+    fprintf(archivo, "PERSONAS %d\n", total);
+
+    personaActual = comuna->habitantes;
+    while(personaActual!=NULL){
+        fprintf(archivo, "PERSONA %s\n", personaActual->nombre);
+
+        int servicios = 0;
+        struct servicio* servicioActual = personaActual->servicios;
+        while(servicioActual!=NULL){
+            servicios = servicios + 1;
+            servicioActual = servicioActual->siguiente;
+        }
+        fprintf(archivo, "SERVICIOS %d\n", servicios);
+        servicioActual = personaActual->servicios;
+        while(servicioActual!=NULL){
+            fprintf(archivo, "SERVICIO %s\n", servicioActual->nombre);
+            servicioActual = servicioActual->siguiente;
+        }
+
+        int libros = 0;
+        struct libroLeido* libroActual = personaActual->libros;
+        while(libroActual!=NULL){
+            libros = libros + 1;
+            libroActual = libroActual->siguiente;
+        }
+        fprintf(archivo, "LIBROS %d\n", libros);
+        libroActual = personaActual->libros;
+        while(libroActual!=NULL){
+            fprintf(archivo, "LIBRO %s\n", libroActual->nombre);
+            libroActual = libroActual->siguiente;
+        }
+
+        fprintf(archivo, "APRENDIO %d\n", personaActual->aprendioLeyendo);
+        fprintf(archivo, "FIN PERSONA\n");
+        personaActual = personaActual->siguiente;
+    }
+}
+
+/**
+ * guardarSplay: Escribe el arbol chaflaneado en preorden (raiz, izquierdo,
+ * derecho). Si el nodo es NULL escribe NULO, asi al cargar se reconstruye
+ * exactamente la misma forma del arbol. El texto va despues de la cantidad
+ * de archivos porque la busqueda puede llevar espacios.
+ */
+void guardarSplay(FILE* archivo, struct nodoSplay* raiz){
+    if(raiz==NULL){
+        fprintf(archivo, "NULO\n");
+        return;
+    }
+    fprintf(archivo, "NODO %d %s\n", raiz->cantidadArchivos, raiz->texto);
+    int i = 0;
+    while(i<raiz->cantidadArchivos && i<50){
+        fprintf(archivo, "ARCHIVO %s\n", raiz->archivos[i]);
+        i = i + 1;
+    }
+    guardarSplay(archivo, raiz->izquierda);
+    guardarSplay(archivo, raiz->derecha);
+}
+
+/**
+ * guardarComuna: Escribe en el archivo todos los datos de una comuna:
+ * su nombre, si es del jugador, sus indices, sus bienes, sus habitantes
+ * y su arbol chaflaneado.
+ */
+void guardarComuna(FILE* archivo, struct comuna* comuna){
+    fprintf(archivo, "COMUNA %s\n", comuna->nombre);
+    fprintf(archivo, "ADMINISTRADA %d\n", comuna->administrada);
+    fprintf(archivo, "INDICES %g %g %g %g %g %d %d\n",
+            comuna->necesidad, comuna->necesidadLocal, comuna->satisfaccion,
+            comuna->pobreza, comuna->reciprocidad,
+            comuna->regalosDados, comuna->regalosRecibidos);
+    guardarBienes(archivo, comuna);
+    guardarPersonas(archivo, comuna);
+    fprintf(archivo, "CACHE\n");
+    guardarSplay(archivo, comuna->cache);
+    fprintf(archivo, "FIN COMUNA\n");
+}
+
+/**
+ * guardarPartida: Guarda toda la sociedad y el estado en el archivo
+ * partidaN. Escribe primero un archivo temporal y lo renombra, para que
+ * si se corta el programa no quede una partida a medias.
+ * Retorna 1 si guardo y 0 si hubo error.
+ */
+int guardarPartida(struct comuna* lista, int slot){
+    if(slot<1 || slot>3){
+        return 0;
+    }
+    char temporal[20];
+    char definitivo[20];
+    sprintf(temporal, "partida%d.tmp", slot);
+    sprintf(definitivo, "partida%d", slot);
+
+    FILE* archivo = fopen(temporal, "w");
+    if(archivo==NULL){
+        printf("Error: no se pudo abrir el archivo para guardar.\n");
+        return 0;
+    }
+
+    fprintf(archivo, "PARTIDA %d\n", slot);
+    guardarEstado(archivo);
+    int total = contarComunas(lista);
+    fprintf(archivo, "COMUNAS %d\n", total);
+    struct comuna* comunaActual = lista;
+    int contador = 0;
+    while(comunaActual!=NULL && contador<total){
+        guardarComuna(archivo, comunaActual);
+        comunaActual = comunaActual->siguiente;
+        contador = contador + 1;
+    }
+    fprintf(archivo, "FIN PARTIDA\n");
+    fclose(archivo);
+
+    if(rename(temporal, definitivo)!=0){
+        printf("Error: no se pudo terminar de guardar la partida.\n");
+        remove(temporal);
+        return 0;
+    }
+    return 1;
+}
+
+/**
+ * pedirGuardarPartida: Pide en que slot guardar y guarda la partida.
+ * Muestra los 3 slots, avisa si ya hay una partida ahi y pregunta antes
+ * de sobrescribir.
+ * Retorna 1 si guardo y 0 si no (entrada invalida, cancelo o hubo error).
+ */
+int pedirGuardarPartida(struct comuna* lista){
+    printf("\n");
+    printf("########################################\n");
+    printf("#  GUARDAR PARTIDA\n");
+    printf("#  Slots disponibles: [1] [2] [3]\n");
+    printf("########################################\n");
+    printf("En que slot guardar? ");
+
+    int slot;
+    if(scanf("%d", &slot)!=1){
+        if(limpiarEntrada()==0){
+            return 0;
+        }
+        printf("Entrada invalida, escribe un numero.\n");
+        return 0;
+    }
+    if(slot<1 || slot>3){
+        printf("Slot invalido, solo existen los slots 1, 2 y 3.\n");
+        return 0;
+    }
+
+    if(existePartida(slot)==1){
+        printf("Ya hay una partida en el slot %d. Sobrescribir? [1] Si [2] No: ", slot);
+        int respuesta;
+        if(scanf("%d", &respuesta)!=1){
+            if(limpiarEntrada()==0){
+                return 0;
+            }
+            printf("Entrada invalida, escribe un numero.\n");
+            return 0;
+        }
+        if(respuesta!=1){
+            printf("Se cancelo el guardado.\n");
+            return 0;
+        }
+    }
+
+    if(guardarPartida(lista, slot)==1){
+        printf("Partida guardada en el slot %d (dia %d)\n", slot, estado.dia_actual);
+        return 1;
+    }
+    return 0;
+}
+
+/**
+ * mostrarMenu: Muestra el menu de opciones del jugador.
+ * Si guardarDisponible es 1 imprime tambien la opcion 6 de guardar
+ * partida, que solo aparece en los dias multiplos de 5.
+ */
+void mostrarMenu(int guardarDisponible){
     printf("\n");
     printf("########################################\n");
     printf("#  MENU PRINCIPAL\n");
@@ -1071,6 +1310,9 @@ void mostrarMenu(){
     printf("#  [3] Ver detalle de comuna\n");
     printf("#  [4] Finalizar dia\n");
     printf("#  [5] Ir a la biblioteca\n");
+    if(guardarDisponible==1){
+        printf("#  [6] Guardar partida\n");
+    }
     printf("########################################\n");
     printf("\n");
     printf("Selecciona una opcion: ");
@@ -1973,10 +2215,15 @@ int turnoDia(struct comuna* lista){
         return 1;
     }
     int turnos = calcularTurnosPorDia(contarComunas(lista));
+    // La opcion de guardar solo aparece en los dias multiplos de 5
+    int guardarDisponible = 0;
+    if(estado.dia_actual % 5 == 0){
+        guardarDisponible = 1;
+    }
     printf("\nTienes %d turnos para realizar transferencias.\n", turnos);
     while(turnos>0){
         mostrarResumen(lista);
-        mostrarMenu();
+        mostrarMenu(guardarDisponible);
         int opcion;
         if(scanf("%d", &opcion)!=1){
             if(limpiarEntrada()==0){
@@ -2116,6 +2363,9 @@ int turnoDia(struct comuna* lista){
                 printf("\nSe acabo la entrada, se termina el dia.\n");
                 return 0;
             }
+        }
+        else if(opcion==6 && guardarDisponible==1){
+            pedirGuardarPartida(lista);
         }
         else{
             printf("Opcion invalida.\n");
